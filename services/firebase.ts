@@ -33,26 +33,71 @@ const auth: Auth = getAuth(app);
 const db: Firestore = getFirestore(app);
 
 const APP_ID = 'ordo-continuum-legacy-v1';
+const LOCAL_STORAGE_KEY = 'ordo_local_storage_db';
+
+// --- MOCK / OFFLINE MODE IMPLEMENTATION ---
+let isOfflineMode = false;
+const listeners: Set<() => void> = new Set();
+
+const getLocalDB = (): Record<string, Character> => {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+};
+
+const setLocalDB = (data: Record<string, Character>) => {
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+  listeners.forEach(l => l());
+};
 
 export const OrdoService = {
   auth,
   db,
   
-  init: (): Promise<User> => {
-    return new Promise((resolve, reject) => {
-      onAuthStateChanged(auth, (user) => {
-        if (user) {
-          resolve(user);
-        } else {
-          signInAnonymously(auth)
-            .then((uc) => resolve(uc.user))
-            .catch(reject);
+  init: (): Promise<User | { uid: string }> => {
+    return new Promise((resolve) => {
+      // 1. Try to listen for auth state
+      const unsub = onAuthStateChanged(auth, 
+        (user) => {
+          if (user) {
+            unsub();
+            resolve(user);
+          } else {
+            // 2. If no user, try to sign in
+            signInAnonymously(auth)
+              .then((uc) => {
+                unsub();
+                resolve(uc.user);
+              })
+              .catch((err) => {
+                // 3. If sign in fails (e.g. referer blocked or bad key), switch to offline
+                console.warn("Firebase connection failed. Switching to Offline Mode (LocalStorage).", err);
+                isOfflineMode = true;
+                unsub();
+                resolve({ uid: 'offline-user' });
+              });
+          }
+        },
+        (error) => {
+           // Auth state change error (rare but possible)
+           console.warn("Firebase Auth Error. Switching to Offline Mode.", error);
+           isOfflineMode = true;
+           resolve({ uid: 'offline-user' });
         }
-      });
+      );
     });
   },
 
   subscribeAll: (callback: (data: Record<string, Character>) => void) => {
+    if (isOfflineMode) {
+      const handler = () => callback(getLocalDB());
+      listeners.add(handler);
+      handler(); // Immediate call
+      return () => { listeners.delete(handler); };
+    }
+
     const collRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'protocols');
     return onSnapshot(collRef, (snapshot) => {
       const data: Record<string, Character> = {};
@@ -60,10 +105,23 @@ export const OrdoService = {
         data[docSnap.id] = docSnap.data() as Character;
       });
       callback(data);
+    }, (err) => {
+        console.error("Firebase Snapshot Error (All)", err);
+        // Optional: could fallback here too, but init usually catches it
     });
   },
 
   subscribeOne: (id: string, callback: (data: Character | null) => void) => {
+    if (isOfflineMode) {
+      const handler = () => {
+        const db = getLocalDB();
+        callback(db[id] || null);
+      };
+      listeners.add(handler);
+      handler();
+      return () => { listeners.delete(handler); };
+    }
+
     const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'protocols', id);
     return onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -71,12 +129,12 @@ export const OrdoService = {
       } else {
         callback(null);
       }
+    }, (err) => {
+        console.error("Firebase Snapshot Error (One)", err);
     });
   },
 
   create: async (name: string): Promise<string> => {
-    if (!auth.currentUser) throw new Error("Not authenticated");
-    
     const id = name.toLowerCase().replace(/\s+/g, '_') + "_" + Math.floor(Math.random() * 10000);
     
     const newChar: Character = {
@@ -105,19 +163,41 @@ export const OrdoService = {
         locks: { identity: false, biometrics: false, skills: false, equipment: false, psych: false, psionics: false, universalis: false }
     };
 
+    if (isOfflineMode) {
+      const db = getLocalDB();
+      db[id] = newChar;
+      setLocalDB(db);
+      return id;
+    }
+
     await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'protocols', id), newChar);
     return id;
   },
 
   update: async (id: string, data: Partial<Character>) => {
-    if (!auth.currentUser) return;
-    // Basic cleanup to remove undefined
     const cleanData = JSON.parse(JSON.stringify(data));
+    
+    if (isOfflineMode) {
+      const db = getLocalDB();
+      if (db[id]) {
+        // App sends full object on update, so spread is safe
+        db[id] = { ...db[id], ...cleanData };
+        setLocalDB(db);
+      }
+      return;
+    }
+
     await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'protocols', id), cleanData, { merge: true });
   },
 
   delete: async (id: string) => {
-    if (!auth.currentUser) return;
+    if (isOfflineMode) {
+      const db = getLocalDB();
+      delete db[id];
+      setLocalDB(db);
+      return;
+    }
+
     await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'protocols', id));
   }
 };
