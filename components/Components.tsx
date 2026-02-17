@@ -149,6 +149,115 @@ export const DragHandle: React.FC<React.HTMLAttributes<HTMLDivElement>> = (props
   </div>
 );
 
+export const EmpireImageModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: (url: string) => void;
+}> = ({ isOpen, onClose, onConfirm }) => {
+  const [tab, setTab] = useState<'url' | 'file'>('url');
+  const [url, setUrl] = useState('');
+  const [error, setError] = useState('');
+
+  if (!isOpen) return null;
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setError('');
+      const file = e.target.files?.[0];
+      if (file) {
+          if (file.size > 800 * 1024) { // 800KB limit warning
+              setError("WARNING: File size large. Codex capacity limited.");
+          }
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              onConfirm(reader.result as string);
+              onClose();
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fadeIn" onClick={onClose}>
+      <div className="bg-[#100c0c] border-2 border-ordo-gold p-1 w-full max-w-[500px] shadow-[0_0_40px_rgba(212,175,55,0.2)]" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="bg-[radial-gradient(circle_at_center,#2a2020_0%,#000_100%)] border-b border-ordo-gold p-4 flex justify-between items-center mb-6">
+            <span className="font-header font-bold text-ordo-gold tracking-[3px] uppercase text-lg drop-shadow-[0_0_5px_rgba(212,175,55,0.5)]">VISUAL DATA INPUT</span>
+            <button onClick={onClose} className="text-ordo-gold hover:text-white font-header text-2xl leading-none">&times;</button>
+        </div>
+
+        <div className="px-6 pb-6">
+            {/* Tabs */}
+            <div className="flex mb-8 border-b border-ordo-gold-dim/30">
+                <button 
+                    onClick={() => setTab('url')} 
+                    className={`flex-1 py-3 font-header tracking-wider transition-all duration-300 ${tab === 'url' ? 'text-ordo-gold bg-[rgba(212,175,55,0.1)] border-t border-l border-r border-ordo-gold' : 'text-ordo-gold-dim hover:text-ordo-gold hover:bg-[rgba(212,175,55,0.05)]'}`}
+                >
+                    DATA LINK
+                </button>
+                <button 
+                    onClick={() => setTab('file')} 
+                    className={`flex-1 py-3 font-header tracking-wider transition-all duration-300 ${tab === 'file' ? 'text-ordo-gold bg-[rgba(212,175,55,0.1)] border-t border-l border-r border-ordo-gold' : 'text-ordo-gold-dim hover:text-ordo-gold hover:bg-[rgba(212,175,55,0.05)]'}`}
+                >
+                    LOCAL UPLOAD
+                </button>
+            </div>
+
+            {/* Content */}
+            <div className="min-h-[150px] flex flex-col justify-center">
+                {tab === 'url' ? (
+                     <div className="w-full">
+                        <label className="block text-ordo-gold-dim text-xs mb-3 font-header tracking-[2px] uppercase">External Resource Identifier</label>
+                        <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-ordo-gold-dim font-mono text-xs">URL:</span>
+                            <input 
+                                autoFocus
+                                type="text" 
+                                className="w-full bg-[rgba(0,0,0,0.3)] border-b border-ordo-gold text-white font-mono text-sm pl-12 pr-2 py-3 focus:outline-none focus:border-ordo-crimson focus:bg-[rgba(212,175,55,0.05)] transition-colors placeholder-gray-700"
+                                placeholder="HTTPS://..."
+                                value={url}
+                                onChange={e => setUrl(e.target.value)}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter' && url.trim()) {
+                                        onConfirm(url);
+                                        onClose();
+                                    }
+                                }}
+                            />
+                        </div>
+                     </div>
+                ) : (
+                    <div className="border-2 border-dashed border-ordo-gold-dim p-8 text-center relative hover:bg-[rgba(212,175,55,0.05)] hover:border-ordo-gold transition-all cursor-pointer group bg-[rgba(0,0,0,0.3)]">
+                        <input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                        <div className="text-ordo-gold text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">
+                            <i className="fa-solid fa-file-arrow-up"></i>
+                        </div>
+                        <div className="text-ordo-gold font-header tracking-widest text-sm group-hover:text-white transition-colors">INITIATE UPLOAD SEQUENCE</div>
+                        <div className="text-ordo-gold-dim text-xs mt-3 font-mono">SUPPORTED FORMATS: JPG, PNG, WEBP</div>
+                        {error && <div className="text-ordo-crimson text-xs mt-2 font-bold animate-pulse font-mono border border-ordo-crimson/30 bg-ordo-crimson/10 p-1">{error}</div>}
+                    </div>
+                )}
+            </div>
+
+            {/* Footer / Action */}
+            {tab === 'url' && (
+                <button 
+                    onClick={() => {
+                        if (url.trim()) {
+                            onConfirm(url);
+                            onClose();
+                        }
+                    }} 
+                    className="mt-6 w-full bg-transparent border border-ordo-gold text-ordo-gold py-3 hover:bg-ordo-gold hover:text-black font-header font-bold uppercase transition-all tracking-[2px] shadow-[0_0_15px_rgba(212,175,55,0.1)] hover:shadow-[0_0_25px_rgba(212,175,55,0.4)]"
+                >
+                    ESTABLISH LINK
+                </button>
+            )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- RESISTANCE COMPONENTS ---
 
 export const ResistanceNumberInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ className, onChange, value, ...props }) => {
