@@ -28,6 +28,7 @@ namespace Helper
         public bool IsResistance { get; set; }
         public JObject Data { get; set; }
         public string CurrentTab { get; set; } = "identity";
+        public bool IsDeleteMode { get; set; } = false; // Controls UI state
     }
 
     partial class Program
@@ -54,7 +55,7 @@ namespace Helper
 
         public async Task MainAsync()
         {
-            Console.WriteLine(">>> STARTING ORDO BOT V3.6.1 (FIX BUILD)...");
+            Console.WriteLine(">>> STARTING ORDO BOT V3.7 (SINGLE MESSAGE MODE)...");
 
             string envPath = FindEnvFile();
             if (!string.IsNullOrEmpty(envPath)) Env.Load(envPath);
@@ -99,7 +100,8 @@ namespace Helper
         {
             if (!ActiveSessions.ContainsKey(e.Message.Id))
             {
-                await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("⚠️ Session expired.").AsEphemeral(true));
+                // Try to recover if it's a known interaction on an old message, but usually we just fail gracefully
+                await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("⚠️ Session expired. Please run /dossier again.").AsEphemeral(true));
                 return;
             }
 
@@ -107,74 +109,74 @@ namespace Helper
             
             try 
             {
-                // --- TAB SWITCHING (AUTO-UPDATE LOGIC) ---
+                // --- TAB SWITCHING (Seamless Update) ---
                 if (e.Id.StartsWith("tab_"))
                 {
-                    await e.Interaction.DeferAsync(); // Acknowledge first
+                    // Crucial: Use DeferredMessageUpdate to keep the SAME message
+                    await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
 
                     // 1. RE-FETCH DATA FROM DB
                     var (freshData, _) = await FirestoreHelper.FetchProtocolData(state.CharId);
-                    if (freshData != null) state.Data = freshData; // Update local state
+                    if (freshData != null) state.Data = freshData;
 
                     state.CurrentTab = e.Id.Replace("tab_", "");
+                    state.IsDeleteMode = false; // Reset delete mode on tab switch
                     
                     var (embed, components, attachment) = BuildInterface(state);
                     
                     var builder = new DiscordWebhookBuilder().AddEmbed(embed).AddComponents(components);
-                    if (attachment != null)
-                    {
-                        builder.AddFile("profile.png", attachment);
-                    }
+                    if (attachment != null) builder.AddFile("profile.png", attachment);
 
                     await e.Interaction.EditOriginalResponseAsync(builder);
                 }
-                // --- DELETE FLOW ---
+                // --- ENTER DELETE MODE (Seamless) ---
                 else if (e.Id == "btn_delete_mode")
                 {
-                    // Generate a dropdown for deletion based on current tab
-                    var options = GetInspectOptions(state);
-                    if (options.Count == 0)
-                    {
-                        await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("⚠️ Nothing to delete in this tab.").AsEphemeral(true));
-                        return;
-                    }
-
-                    var dropdown = new DiscordSelectComponent("menu_delete", "Select item to PERMANENTLY DELETE...", options.Take(25).ToList());
-                    // FIX: Wrap dropdown in array/list for ActionRow constructor
-                    await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("⚠️ **DELETION MODE**\nSelect an item below to remove it from the database.").AddComponents(new DiscordActionRowComponent(new [] { dropdown })).AsEphemeral(true));
+                    await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
+                    state.IsDeleteMode = true; // Set flag
+                    
+                    var (embed, components, _) = BuildInterface(state);
+                    await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed).AddComponents(components));
                 }
+                // --- CANCEL DELETE (Seamless) ---
+                else if (e.Id == "btn_delete_cancel")
+                {
+                    await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
+                    state.IsDeleteMode = false; // Clear flag
+                    
+                    var (embed, components, attachment) = BuildInterface(state);
+                    var builder = new DiscordWebhookBuilder().AddEmbed(embed).AddComponents(components);
+                    if (attachment != null) builder.AddFile("profile.png", attachment);
+                    
+                    await e.Interaction.EditOriginalResponseAsync(builder);
+                }
+                // --- EXECUTE DELETE (Seamless) ---
                 else if (e.Id == "menu_delete")
                 {
-                    var selectedId = e.Values.FirstOrDefault(); // Format: type:index
+                    var selectedId = e.Values.FirstOrDefault(); 
                     if (selectedId != null)
                     {
-                        await e.Interaction.DeferAsync(ephemeral: true); // Processing...
+                        await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
 
                         var parts = selectedId.Split(':');
                         var type = parts[0];
                         var index = int.Parse(parts[1]);
-
                         string path = FirestoreHelper.GetPathByType(type);
                         
-                        // 1. Modify local object
                         FirestoreHelper.RemoveItemFromArray(state.Data, path, index);
-
-                        // 2. Sync to DB
                         await FirestoreHelper.SyncArray(state.CharId, state.IsResistance, state.Data, path);
 
-                        // 3. Rebuild UI
+                        // Return to normal mode after delete
+                        state.IsDeleteMode = false; 
+
                         var (embed, components, attachment) = BuildInterface(state);
                         var builder = new DiscordWebhookBuilder().AddEmbed(embed).AddComponents(components);
                         if (attachment != null) builder.AddFile("profile.png", attachment);
 
-                        // Update the MAIN message (not the ephemeral one)
-                        await e.Message.ModifyAsync(new DiscordMessageBuilder().AddEmbed(embed).AddComponents(components));
-                        
-                        // Reply to ephemeral
-                        await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().WithContent($"✅ Item deleted."));
+                        await e.Interaction.EditOriginalResponseAsync(builder);
                     }
                 }
-                // --- OTHER BUTTONS ---
+                // --- MODALS (These require a Modal response, not an Update) ---
                 else if (e.Id == "btn_edit_vitals")
                 {
                     var hp = FirestoreHelper.GetField(state.Data, "stats.mapValue.fields.hp_curr") ?? "0";
@@ -224,8 +226,10 @@ namespace Helper
                         .AddComponents(new TextInputComponent("New Value", "val", "Number"));
                      await e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
                 }
+                // --- INSPECT (Ephemeral Only) ---
                 else if (e.Id == "menu_inspect")
                 {
+                    // Inspect creates a NEW ephemeral message (as it's temporary info), doesn't update the main UI
                     var selectedId = e.Values.FirstOrDefault();
                     if (selectedId != null)
                     {
@@ -240,7 +244,8 @@ namespace Helper
             catch (Exception ex)
             {
                 Console.WriteLine($"Interaction Error: {ex}");
-                await e.Interaction.CreateFollowupMessageAsync(new DiscordFollowupMessageBuilder().WithContent("❌ Error processing request.").AsEphemeral(true));
+                // Try to alert user if possible
+                try { await e.Interaction.CreateFollowupMessageAsync(new DiscordFollowupMessageBuilder().WithContent("❌ Error processing request.").AsEphemeral(true)); } catch {}
             }
         }
 
@@ -252,6 +257,8 @@ namespace Helper
             if (!ActiveSessions.ContainsKey(msgId)) return;
 
             var state = ActiveSessions[msgId];
+            
+            // Critical: Update the EXISTING message after modal submit
             await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
 
             try
@@ -351,10 +358,39 @@ namespace Helper
         // --- UI BUILDER ---
         public static (DiscordEmbed, List<DiscordActionRowComponent>, MemoryStream) BuildInterface(UserState state)
         {
-            var data = state.Data;
             bool isRes = state.IsResistance;
+            var data = state.Data;
             var color = isRes ? new DiscordColor(0x38ff12) : new DiscordColor(0xd4af37);
-            
+
+            // --- DELETE MODE UI ---
+            if (state.IsDeleteMode)
+            {
+                var embedDel = new DiscordEmbedBuilder()
+                    .WithTitle("⚠️ DELETION MODE")
+                    .WithDescription("Select an item below to **PERMANENTLY DELETE** it from the database.\nThis action cannot be undone.")
+                    .WithColor(DiscordColor.Red);
+
+                var options = GetInspectOptions(state);
+                var rowsDel = new List<DiscordActionRowComponent>();
+
+                if (options.Count > 0)
+                {
+                    var dropdown = new DiscordSelectComponent("menu_delete", "Select item to DELETE...", options.Take(25).ToList());
+                    rowsDel.Add(new DiscordActionRowComponent(new[] { dropdown }));
+                }
+                else
+                {
+                    embedDel.WithDescription("No items found in this category to delete.");
+                }
+
+                rowsDel.Add(new DiscordActionRowComponent(new[] {
+                    new DiscordButtonComponent(ButtonStyle.Secondary, "btn_delete_cancel", "Cancel / Go Back")
+                }));
+
+                return (embedDel.Build(), rowsDel, null);
+            }
+
+            // --- NORMAL UI ---
             var btnStyle = isRes ? ButtonStyle.Success : ButtonStyle.Primary;
 
             var name = FirestoreHelper.GetField(data, "meta.mapValue.fields.name") ?? "Unknown";
@@ -573,10 +609,10 @@ namespace Helper
             if(state.CurrentTab == "univ") actions.Add(new DiscordButtonComponent(ButtonStyle.Secondary, "btn_edit_counters", "Set Counter"));
             
             actions.Add(new DiscordButtonComponent(ButtonStyle.Secondary, "btn_add_item", "+ Add Item"));
-            actions.Add(new DiscordButtonComponent(ButtonStyle.Danger, "btn_delete_mode", "Delete Item")); // ADDED DELETE BUTTON
+            actions.Add(new DiscordButtonComponent(ButtonStyle.Danger, "btn_delete_mode", "Delete Item")); // Activates Delete Mode
             rows.Add(new DiscordActionRowComponent(actions));
 
-            // Row 4: Inspect
+            // Row 4: Inspect (Still useful for details)
             var options = GetInspectOptions(state);
 
             if (options.Count > 0)
@@ -667,7 +703,8 @@ namespace Helper
     {
         [SlashCommand("dossier", "Open Dossier")]
         public async Task GetDossier(InteractionContext ctx, [Option("id", "ID")] string input) {
-            await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+            // SET EPHEMERAL HERE: This ensures the initial message is private.
+            await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource, new DiscordInteractionResponseBuilder().AsEphemeral(true));
             
             var (state, error) = await Program.GetSessionState(input);
             
@@ -687,7 +724,7 @@ namespace Helper
         }
     }
 
-    // --- TEXT COMMANDS ---
+    // --- TEXT COMMANDS (Can't be Ephemeral in the same way, but interactions will update gracefully) ---
     public class DossierCommands : BaseCommandModule
     {
         [Command("dossier")]
