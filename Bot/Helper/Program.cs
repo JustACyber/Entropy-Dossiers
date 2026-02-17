@@ -47,7 +47,7 @@ namespace Helper
 
         public async Task MainAsync()
         {
-            Console.WriteLine(">>> STARTING ORDO BOT V2 (SLASH ENABLED)...");
+            Console.WriteLine(">>> STARTING ORDO BOT V2.1 (FIXED)...");
 
             string envPath = FindEnvFile();
             if (!string.IsNullOrEmpty(envPath)) Env.Load(envPath);
@@ -110,55 +110,69 @@ namespace Helper
         // --- INTERACTION HANDLER (BUTTONS & MENUS) ---
         private async Task OnComponentInteraction(DiscordClient sender, ComponentInteractionCreateEventArgs e)
         {
-            if (!ActiveSessions.ContainsKey(e.Message.Id)) return;
+            if (!ActiveSessions.ContainsKey(e.Message.Id)) 
+            {
+                // Session expired or bot restarted
+                await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, 
+                    new DiscordInteractionResponseBuilder().WithContent("⚠️ Session expired. Please run `/dossier` again.").AsEphemeral(true));
+                return;
+            }
 
             var state = ActiveSessions[e.Message.Id];
             
-            // 1. Navigation Tabs
-            if (e.Id.StartsWith("tab_"))
+            try 
             {
-                state.CurrentTab = e.Id.Replace("tab_", "");
-                var (embed, components) = BuildInterface(state);
-                await e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, 
-                    new DiscordInteractionResponseBuilder().AddEmbed(embed).AddComponents(components));
-            }
-            // 2. Open Modals
-            else if (e.Id == "btn_edit_vitals")
-            {
-                var hp = FirestoreHelper.GetField(state.Data, "stats.mapValue.fields.hp_curr") ?? "0";
-                var temp = FirestoreHelper.GetField(state.Data, "stats.mapValue.fields.hp_temp") ?? "0";
-                var shield = FirestoreHelper.GetField(state.Data, "stats.mapValue.fields.shield_curr") ?? "0";
-
-                var modal = new DiscordInteractionResponseBuilder()
-                    .WithTitle("EDIT VITALS")
-                    .WithCustomId($"modal_vitals_{e.Message.Id}")
-                    .AddComponents(new TextInputComponent("Current HP", "hp_curr", "Value", hp, min_length: 1, max_length: 4))
-                    .AddComponents(new TextInputComponent("Temp HP", "hp_temp", "Value (0 to clear)", temp, required: false))
-                    .AddComponents(new TextInputComponent("Shields", "shield_curr", "Value (0 to clear)", shield, required: false));
-
-                await e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
-            }
-            else if (e.Id == "btn_add_item")
-            {
-                var modal = new DiscordInteractionResponseBuilder()
-                    .WithTitle("ADD ITEM / COUNTER")
-                    .WithCustomId($"modal_add_{e.Message.Id}")
-                    .AddComponents(new TextInputComponent("Name", "name", "Item Name"))
-                    .AddComponents(new TextInputComponent("Description / Value", "desc", "Description or numeric value"))
-                    .AddComponents(new TextInputComponent("Type (inventory, weapon, counter)", "type", "inventory", "inventory"));
-
-                await e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
-            }
-            // 3. Inspection (Dropdowns)
-            else if (e.Id == "menu_inspect")
-            {
-                var selectedId = e.Values.FirstOrDefault();
-                if (selectedId != null)
+                // 1. Navigation Tabs
+                if (e.Id.StartsWith("tab_"))
                 {
-                    var desc = FindDescription(state.Data, selectedId);
-                    await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, 
-                        new DiscordInteractionResponseBuilder().WithContent($"**Info:**\n{desc}").AsEphemeral(true));
+                    state.CurrentTab = e.Id.Replace("tab_", "");
+                    var (embed, components) = BuildInterface(state);
+                    await e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, 
+                        new DiscordInteractionResponseBuilder().AddEmbed(embed).AddComponents(components));
                 }
+                // 2. Open Modals
+                else if (e.Id == "btn_edit_vitals")
+                {
+                    var hp = FirestoreHelper.GetField(state.Data, "stats.mapValue.fields.hp_curr") ?? "0";
+                    var temp = FirestoreHelper.GetField(state.Data, "stats.mapValue.fields.hp_temp") ?? "0";
+                    var shield = FirestoreHelper.GetField(state.Data, "stats.mapValue.fields.shield_curr") ?? "0";
+
+                    var modal = new DiscordInteractionResponseBuilder()
+                        .WithTitle("EDIT VITALS")
+                        .WithCustomId($"modal_vitals_{e.Message.Id}")
+                        .AddComponents(new TextInputComponent("Current HP", "hp_curr", "Value", hp, min_length: 1, max_length: 4))
+                        .AddComponents(new TextInputComponent("Temp HP", "hp_temp", "Value (0 to clear)", temp, required: false))
+                        .AddComponents(new TextInputComponent("Shields", "shield_curr", "Value (0 to clear)", shield, required: false));
+
+                    await e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
+                }
+                else if (e.Id == "btn_add_item")
+                {
+                    var modal = new DiscordInteractionResponseBuilder()
+                        .WithTitle("ADD ITEM / COUNTER")
+                        .WithCustomId($"modal_add_{e.Message.Id}")
+                        .AddComponents(new TextInputComponent("Name", "name", "Item Name"))
+                        .AddComponents(new TextInputComponent("Description / Value", "desc", "Description or numeric value"))
+                        .AddComponents(new TextInputComponent("Type (inventory, weapon, counter)", "type", "inventory", "inventory"));
+
+                    await e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
+                }
+                // 3. Inspection (Dropdowns)
+                else if (e.Id == "menu_inspect")
+                {
+                    var selectedId = e.Values.FirstOrDefault();
+                    if (selectedId != null)
+                    {
+                        var desc = FindDescription(state.Data, selectedId);
+                        await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, 
+                            new DiscordInteractionResponseBuilder().WithContent($"**Info:**\n{desc}").AsEphemeral(true));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Interaction Error: {ex}");
+                await e.Interaction.CreateFollowupMessageAsync(new DiscordFollowupMessageBuilder().WithContent("❌ Interface Error.").AsEphemeral(true));
             }
         }
 
@@ -173,40 +187,43 @@ namespace Helper
             var state = ActiveSessions[msgId];
             await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
 
-            if (parts[1] == "vitals")
+            try
             {
-                var hp = e.Values["hp_curr"];
-                var temp = e.Values["hp_temp"];
-                var shield = e.Values["shield_curr"];
-
-                // Update Local State
-                FirestoreHelper.SetField(state.Data, "stats.mapValue.fields.hp_curr", hp);
-                FirestoreHelper.SetField(state.Data, "stats.mapValue.fields.hp_temp", temp);
-                FirestoreHelper.SetField(state.Data, "stats.mapValue.fields.shield_curr", shield);
-
-                // Send to Firebase
-                var updates = new Dictionary<string, object>
+                if (parts[1] == "vitals")
                 {
-                    { "fields.stats.mapValue.fields.hp_curr.integerValue", int.Parse(hp) },
-                    { "fields.stats.mapValue.fields.hp_temp.integerValue", int.Parse(temp) },
-                    { "fields.stats.mapValue.fields.shield_curr.integerValue", int.Parse(shield) }
-                };
-                await FirestoreHelper.PatchFields(state.CharId, state.IsResistance, updates);
+                    var hp = e.Values["hp_curr"];
+                    var temp = e.Values["hp_temp"];
+                    var shield = e.Values["shield_curr"];
+
+                    // Update Local State
+                    FirestoreHelper.SetField(state.Data, "stats.mapValue.fields.hp_curr", hp);
+                    FirestoreHelper.SetField(state.Data, "stats.mapValue.fields.hp_temp", temp);
+                    FirestoreHelper.SetField(state.Data, "stats.mapValue.fields.shield_curr", shield);
+
+                    // Send to Firebase
+                    var updates = new Dictionary<string, object>
+                    {
+                        { "fields.stats.mapValue.fields.hp_curr.integerValue", int.Parse(hp) },
+                        { "fields.stats.mapValue.fields.hp_temp.integerValue", int.Parse(temp) },
+                        { "fields.stats.mapValue.fields.shield_curr.integerValue", int.Parse(shield) }
+                    };
+                    await FirestoreHelper.PatchFields(state.CharId, state.IsResistance, updates);
+                }
+                else if (parts[1] == "add")
+                {
+                    // For MVP showing alert.
+                    await e.Interaction.CreateFollowupMessageAsync(new DiscordFollowupMessageBuilder().WithContent("⚠️ Item Addition via Discord is limited in this version.").AsEphemeral(true));
+                    return;
+                }
+
+                // Refresh UI
+                var (embed, components) = BuildInterface(state);
+                await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed).AddComponents(components));
             }
-            else if (parts[1] == "add")
+            catch (Exception ex)
             {
-                var name = e.Values["name"];
-                var desc = e.Values["desc"];
-                var type = e.Values["type"].ToLower().Trim();
-
-                // FIX: Used CreateFollowupMessageAsync instead of FollowUpAsync
-                await e.Interaction.CreateFollowupMessageAsync(new DiscordFollowupMessageBuilder().WithContent("⚠️ Item Addition via Discord is limited in this version.").AsEphemeral(true));
-                return;
+                Console.WriteLine($"Modal Error: {ex}");
             }
-
-            // Refresh UI
-            var (embed, components) = BuildInterface(state);
-            await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed).AddComponents(components));
         }
 
         // --- UI BUILDER ---
@@ -216,7 +233,7 @@ namespace Helper
             bool isRes = state.IsResistance;
             var color = isRes ? new DiscordColor(0x38ff12) : new DiscordColor(0xd4af37);
             
-            var name = FirestoreHelper.GetField(data, "meta.mapValue.fields.name");
+            var name = FirestoreHelper.GetField(data, "meta.mapValue.fields.name") ?? "Unknown";
             var img = FirestoreHelper.GetField(data, "meta.mapValue.fields.image");
             
             var embed = new DiscordEmbedBuilder()
@@ -231,16 +248,17 @@ namespace Helper
                 case "identity":
                     embed.WithDescription($"**ID:** {state.CharId}\n**Rank:** {FirestoreHelper.GetField(data, "meta.mapValue.fields.rank")}");
                     embed.AddField("Bio", $"{FirestoreHelper.GetField(data, "meta.mapValue.fields.race")} {FirestoreHelper.GetField(data, "meta.mapValue.fields.class")}", true);
-                    embed.AddField("Archetype", FirestoreHelper.GetField(data, "meta.mapValue.fields.archetype"), true);
-                    embed.AddField("Analysis", (FirestoreHelper.GetField(data, "psych.mapValue.fields.analysis") ?? "N/A").Substring(0, Math.Min(500, (FirestoreHelper.GetField(data, "psych.mapValue.fields.analysis")??"").Length)), false);
+                    embed.AddField("Archetype", FirestoreHelper.GetField(data, "meta.mapValue.fields.archetype") ?? "N/A", true);
+                    var analysis = FirestoreHelper.GetField(data, "psych.mapValue.fields.analysis") ?? "N/A";
+                    embed.AddField("Analysis", analysis.Substring(0, Math.Min(500, analysis.Length)), false);
                     break;
 
                 case "stats":
-                    string hp = FirestoreHelper.GetField(data, "stats.mapValue.fields.hp_curr");
-                    string max = FirestoreHelper.GetField(data, "stats.mapValue.fields.hp_max");
-                    string temp = FirestoreHelper.GetField(data, "stats.mapValue.fields.hp_temp");
-                    string ac = FirestoreHelper.GetField(data, "stats.mapValue.fields.ac");
-                    string sh = FirestoreHelper.GetField(data, "stats.mapValue.fields.shield_curr");
+                    string hp = FirestoreHelper.GetField(data, "stats.mapValue.fields.hp_curr") ?? "0";
+                    string max = FirestoreHelper.GetField(data, "stats.mapValue.fields.hp_max") ?? "0";
+                    string temp = FirestoreHelper.GetField(data, "stats.mapValue.fields.hp_temp") ?? "0";
+                    string ac = FirestoreHelper.GetField(data, "stats.mapValue.fields.ac") ?? "10";
+                    string sh = FirestoreHelper.GetField(data, "stats.mapValue.fields.shield_curr") ?? "0";
 
                     embed.AddField("VITALS", $"**HP:** {hp}/{max} {(temp!="0" ? $"(+{temp})" : "")}\n**AC:** {ac}\n**Shields:** {sh}", false);
                     
@@ -248,7 +266,9 @@ namespace Helper
                     var attrStr = "";
                     foreach(var a in attrs)
                     {
-                        var val = int.Parse(FirestoreHelper.GetField(data, $"stats.mapValue.fields.{a}.integerValue") ?? "10");
+                        // FIX: Removed .integerValue suffix here, GetField handles extraction
+                        var valStr = FirestoreHelper.GetField(data, $"stats.mapValue.fields.{a}") ?? "10";
+                        var val = int.Parse(valStr);
                         var mod = (val - 10) / 2;
                         attrStr += $"**{a.ToUpper()}:** {val} ({(mod>=0?"+":"")}{mod})\n";
                     }
@@ -392,31 +412,39 @@ namespace Helper
             // Defer response because Firebase fetch might take a moment
             await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
 
-            string id = Program.ExtractId(input);
-            if (string.IsNullOrEmpty(id)) 
-            { 
-                await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("⚠️ Invalid ID or URL provided.")); 
-                return; 
-            }
-
-            var (data, isRes) = await FirestoreHelper.FetchProtocolData(id);
-
-            if (data == null)
+            try
             {
-                await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("❌ Protocol not found in the database."));
-                return;
-            }
+                string id = Program.ExtractId(input);
+                if (string.IsNullOrEmpty(id)) 
+                { 
+                    await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("⚠️ Invalid ID or URL provided.")); 
+                    return; 
+                }
 
-            var state = new UserState { CharId = id, IsResistance = isRes, Data = data, CurrentTab = "identity" };
-            
-            var (embed, components) = Program.BuildInterface(state);
-            
-            // Edit the deferred response with the actual content
-            var msg = await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed).AddComponents(components));
-            
-            // Cache state using the message ID of the response
-            if (Program.ActiveSessions.ContainsKey(msg.Id)) Program.ActiveSessions.Remove(msg.Id);
-            Program.ActiveSessions.Add(msg.Id, state);
+                var (data, isRes) = await FirestoreHelper.FetchProtocolData(id);
+
+                if (data == null)
+                {
+                    await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("❌ Protocol not found in the database."));
+                    return;
+                }
+
+                var state = new UserState { CharId = id, IsResistance = isRes, Data = data, CurrentTab = "identity" };
+                
+                var (embed, components) = Program.BuildInterface(state);
+                
+                // Edit the deferred response with the actual content
+                var msg = await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed).AddComponents(components));
+                
+                // Cache state using the message ID of the response
+                if (Program.ActiveSessions.ContainsKey(msg.Id)) Program.ActiveSessions.Remove(msg.Id);
+                Program.ActiveSessions.Add(msg.Id, state);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Command Error: {ex}");
+                await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent($"❌ System Error: {ex.Message}"));
+            }
         }
     }
 
@@ -465,6 +493,7 @@ namespace Helper
                 if (current == null) return null;
             }
 
+            // It extracts the Value object (e.g., { "integerValue": "10" } or { "stringValue": "foo" })
             return current["stringValue"]?.ToString() ?? current["integerValue"]?.ToString();
         }
 
