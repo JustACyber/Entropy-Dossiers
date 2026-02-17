@@ -199,9 +199,8 @@ namespace Helper
                 var desc = e.Values["desc"];
                 var type = e.Values["type"].ToLower().Trim();
 
-                // Logic to add to array is complex via REST PATCH.
-                // For MVP showing alert.
-                await e.Interaction.FollowUpAsync(new DiscordFollowupMessageBuilder().WithContent("⚠️ Item Addition via Discord is limited in this version.").AsEphemeral(true));
+                // FIX: Used CreateFollowupMessageAsync instead of FollowUpAsync
+                await e.Interaction.CreateFollowupMessageAsync(new DiscordFollowupMessageBuilder().WithContent("⚠️ Item Addition via Discord is limited in this version.").AsEphemeral(true));
                 return;
             }
 
