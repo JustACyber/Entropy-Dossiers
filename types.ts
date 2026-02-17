@@ -28,7 +28,6 @@ export interface Attributes {
   ac: number;
   speed_mod: number; // Legacy, kept for safety
   speed: number; // New Base Speed
-  dashes: number; // New Dashes
   passive_perception_mod: number; // New Passive Perception Modifier
   shield_curr: number;
   shield_max: number;
