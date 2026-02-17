@@ -1,8 +1,10 @@
 [phases.setup]
-nixPkgs = ["dotnet-sdk_8"]
+nixPkgs = ["dotnet-sdk_8", "icu", "zlib", "openssl"]
 
 [phases.build]
-cmds = ["cd Helper && dotnet restore", "cd Helper && dotnet build -c Release"]
+# Собираем самодостаточный (self-contained) бинарник для Linux
+cmds = ["dotnet publish Helper/Helper.csproj -c Release -r linux-x64 --self-contained true -o out"]
 
 [start]
+# Запускаем скрипт
 cmd = "bash start.sh"
