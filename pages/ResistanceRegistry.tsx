@@ -1,13 +1,15 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { OrdoService } from '../services/firebase';
 import { Character } from '../types';
-import { ResistanceInputModal } from '../components/Components';
+import { ResistanceInputModal, ResistanceConfirmModal } from '../components/Components';
 
 const ResistanceRegistry: React.FC = () => {
   const [characters, setCharacters] = useState<Record<string, Character>>({});
   const [isOffline, setIsOffline] = useState(OrdoService.isOffline());
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [deleteData, setDeleteData] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: '', name: '' });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -32,13 +34,11 @@ const ResistanceRegistry: React.FC = () => {
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, id: string, name: string) => {
-    e.stopPropagation();
-    const conf = prompt(`CONFIRM TERMINATION: ${name}\nTYPE "DELETE":`);
-    if (conf === "DELETE") {
-      // USE 'resistance' CONTEXT
-      await OrdoService.delete(id, 'resistance');
-    }
+  const confirmDelete = async () => {
+      if (deleteData.id) {
+          await OrdoService.delete(deleteData.id, 'resistance');
+          setDeleteData({ isOpen: false, id: '', name: '' });
+      }
   };
 
   return (
@@ -51,7 +51,7 @@ const ResistanceRegistry: React.FC = () => {
             }
             .res-hex-grid {
                 background-image: 
-                    linear-gradient(30deg, rgba(56, 255, 18, 0.1) 12%, transparent 12.5%, transparent 87%, rgba(56, 255, 18, 0.1) 87.5%, rgba(56, 255, 18, 0.1)),
+                    linear-gradient(30deg, rgba(56, 255, 18, 0.1) 12%, transparent 12.5%, transparent 87%, rgba(56, 255, 18, 0.1) 87.5%, rgba(56, 255, 18, 0.1) 87.5%, rgba(56, 255, 18, 0.1)),
                     linear-gradient(150deg, rgba(56, 255, 18, 0.1) 12%, transparent 12.5%, transparent 87%, rgba(56, 255, 18, 0.1) 87.5%, rgba(56, 255, 18, 0.1));
                 background-size: 20px 35px;
                 background-position: 0 0, 0 0;
@@ -70,6 +70,14 @@ const ResistanceRegistry: React.FC = () => {
             onConfirm={handleCreate}
             title="INITIALIZE NEW MEMBER"
             placeholder="CODENAME..."
+        />
+
+        <ResistanceConfirmModal 
+            isOpen={deleteData.isOpen}
+            onClose={() => setDeleteData({ ...deleteData, isOpen: false })}
+            onConfirm={confirmDelete}
+            title="CONFIRM TERMINATION"
+            message={`PERMANENTLY DELETE PROTOCOL: ${deleteData.name}?`}
         />
 
         <header className="border-b border-[#1a5c0b] p-4 flex justify-between items-center bg-[#1a5c0b]/20 z-10 relative">
@@ -103,7 +111,7 @@ const ResistanceRegistry: React.FC = () => {
                         <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-[#38ff12]"></div>
 
                         <button 
-                            onClick={(e) => handleDelete(e, char.id, char.meta.name)}
+                            onClick={(e) => { e.stopPropagation(); setDeleteData({ isOpen: true, id: char.id, name: char.meta.name }); }}
                             className="absolute top-2 right-2 text-[#1a5c0b] hover:text-red-500 z-20 px-2 font-bold"
                         >
                             [DEL]
