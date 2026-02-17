@@ -54,7 +54,7 @@ namespace Helper
 
         public async Task MainAsync()
         {
-            Console.WriteLine(">>> STARTING ORDO BOT V3.6 (DELETE & SYNC)...");
+            Console.WriteLine(">>> STARTING ORDO BOT V3.6.1 (FIX BUILD)...");
 
             string envPath = FindEnvFile();
             if (!string.IsNullOrEmpty(envPath)) Env.Load(envPath);
@@ -124,8 +124,6 @@ namespace Helper
                     if (attachment != null)
                     {
                         builder.AddFile("profile.png", attachment);
-                        // Close stream after sending? D#+ handles it usually, but we use 'using' inside builder if possible.
-                        // Here we pass the stream, it will be disposed by the caller or GC.
                     }
 
                     await e.Interaction.EditOriginalResponseAsync(builder);
@@ -142,7 +140,8 @@ namespace Helper
                     }
 
                     var dropdown = new DiscordSelectComponent("menu_delete", "Select item to PERMANENTLY DELETE...", options.Take(25).ToList());
-                    await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("⚠️ **DELETION MODE**\nSelect an item below to remove it from the database.").AddComponents(new DiscordActionRowComponent(dropdown)).AsEphemeral(true));
+                    // FIX: Wrap dropdown in array/list for ActionRow constructor
+                    await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("⚠️ **DELETION MODE**\nSelect an item below to remove it from the database.").AddComponents(new DiscordActionRowComponent(new [] { dropdown })).AsEphemeral(true));
                 }
                 else if (e.Id == "menu_delete")
                 {
@@ -350,7 +349,7 @@ namespace Helper
         }
 
         // --- UI BUILDER ---
-        public static (DiscordEmbed, List<DiscordActionRowComponent>, MemoryStream?) BuildInterface(UserState state)
+        public static (DiscordEmbed, List<DiscordActionRowComponent>, MemoryStream) BuildInterface(UserState state)
         {
             var data = state.Data;
             bool isRes = state.IsResistance;
