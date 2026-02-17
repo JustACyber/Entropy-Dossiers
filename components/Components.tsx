@@ -258,6 +258,42 @@ export const EmpireImageModal: React.FC<{
   );
 };
 
+export const EmpireConfirmModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+}> = ({ isOpen, onClose, onConfirm, title, message }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fadeIn" onClick={onClose}>
+        <div className="bg-[#100c0c] border-2 border-ordo-crimson p-1 w-full max-w-[500px] shadow-[0_0_40px_rgba(138,0,0,0.3)]" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-ordo-crimson/20 to-transparent p-4 flex justify-between items-center border-b border-ordo-crimson mb-6">
+                <span className="font-header font-bold text-ordo-crimson tracking-[3px] uppercase text-lg">{title}</span>
+                <button onClick={onClose} className="text-ordo-crimson hover:text-white font-header text-2xl leading-none">&times;</button>
+            </div>
+            
+            <div className="px-6 pb-6 text-center">
+                <div className="text-gray-300 font-body text-xl mb-8">{message}</div>
+                <div className="flex gap-4">
+                    <button onClick={onClose} className="flex-1 border border-ordo-gold-dim text-ordo-gold-dim py-3 hover:text-white hover:border-white transition-colors font-header tracking-widest uppercase">
+                        ОТМЕНА
+                    </button>
+                    <button 
+                        onClick={() => { onConfirm(); onClose(); }} 
+                        className="flex-1 bg-ordo-crimson text-white border border-ordo-crimson py-3 hover:bg-red-700 hover:border-red-700 font-header font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(138,0,0,0.4)]"
+                    >
+                        УДАЛИТЬ
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+  );
+};
+
 // --- RESISTANCE COMPONENTS ---
 
 export const ResistanceNumberInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ className, onChange, value, ...props }) => {
