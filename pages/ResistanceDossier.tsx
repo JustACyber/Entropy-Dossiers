@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { OrdoService } from '../services/firebase';
@@ -488,11 +489,7 @@ const ResistanceDossier: React.FC = () => {
                                     <div className="flex flex-col gap-2 pt-2">
                                         <div className="flex justify-between items-center">
                                             <span>Базовая Скорость:</span>
-                                            <ResistanceNumberInput step={1.5} min={0} className="w-20 text-center" value={data.stats.speed} onChange={e => update(d => d.stats.speed = parseFloat(e.target.value))} />
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span>Рывки:</span>
-                                            <ResistanceNumberInput step={1} min={0} className="w-20 text-center" value={data.stats.dashes} onChange={e => update(d => d.stats.dashes = parseInt(e.target.value))} />
+                                            <ResistanceNumberInput readOnly step={1.5} min={0} className="w-20 text-center cursor-default" value={data.stats.speed} onChange={e => update(d => d.stats.speed = parseFloat(e.target.value))} />
                                         </div>
                                     </div>
                                     <div className="flex flex-col gap-2 pt-4 border-t border-[#1a5c0b]">
@@ -534,7 +531,7 @@ const ResistanceDossier: React.FC = () => {
                     </div>
                 )}
 
-                {/* ... FEATURES, EQUIPMENT, DATA, PSI (Unchanged logic, just ensure existing renders) ... */}
+                {/* ... FEATURES, EQUIPMENT, DATA, PSI, UNI ... */}
                 {activeTab === 'features' && (
                     <div>
                         <div className="flex gap-2 mb-4 flex-wrap">
@@ -704,7 +701,6 @@ const ResistanceDossier: React.FC = () => {
                          </div>
                     </div>
                 )}
-                 {/* ... Psionics same as Empire but styled, keeping existing logic ... */}
                  {activeTab === 'psi' && (
                      <div>
                         <div className="flex gap-2 mb-4">
@@ -722,7 +718,6 @@ const ResistanceDossier: React.FC = () => {
                                                 <option value="int">INT (Интеллект)</option><option value="wis">WIS (Мудрость)</option><option value="cha">CHA (Харизма)</option>
                                             </select>
                                         </div>
-                                        {/* ... other psi stats unchanged ... */}
                                         <div className="flex justify-between items-center"><span>Тип Псионики:</span> <span className="font-bold text-[#38ff12]">{psiTypeLabel}</span></div>
                                         <div className="flex justify-between items-center"><span>Класс Псионики:</span> <span className="font-bold text-white text-lg">{psiClassLvl}</span></div>
                                         <div className="flex justify-between items-center">
@@ -749,7 +744,6 @@ const ResistanceDossier: React.FC = () => {
                                 </div>
                             </div>
                         )}
-                        {/* Spells list ... */}
                         {subTab === 'spells' && (
                              <div className="border border-[#1a5c0b] p-4 bg-[#0a100a] overflow-x-auto">
                                 <SectionHeader title="Матрица Заклинаний" onAdd={() => addItem(['psionics', 'spells'], {name: 'Новое', time: '1д', range: '18м', cost: 0, dur: 'Мгновенно'})} />
@@ -784,75 +778,79 @@ const ResistanceDossier: React.FC = () => {
                         )}
                      </div>
                  )}
-
-                 {/* --- UNI TAB --- */}
                  {activeTab === 'uni' && (
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="border border-[#1a5c0b] p-4 bg-[#0a100a]">
-                            <SectionHeader title="Кастомный Спасбросок" />
+                            <SectionHeader title="Спасбросок" />
                             <div className="space-y-4">
-                                <div className="flex justify-between"><span>База:</span> <ResistanceNumberInput className="bg-transparent border-b border-[#38ff12] text-center w-16" value={data.universalis.save_base} onChange={e => update(d => d.universalis.save_base = parseInt(e.target.value))} /></div>
-                                <div className="flex justify-between"><span>Атрибут:</span> <select className="bg-black border border-[#38ff12] text-[#38ff12]" value={data.universalis.save_attr} onChange={e => update(d => d.universalis.save_attr = e.target.value as any)}>{ATTRIBUTES.map(a=><option key={a} value={a}>{a.toUpperCase()}</option>)}</select></div>
-                                <div className="text-center pt-4 border-t border-[#1a5c0b]"> <h3 className="text-[#1a5c0b]">ИТОГ</h3> <span className="text-4xl text-[#38ff12] font-bold"> {data.universalis.save_base + getMod(data.stats[data.universalis.save_attr]) + pb} </span> </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[#1a5c0b]">База:</span> 
+                                    <ResistanceNumberInput className="bg-transparent border-b border-[#38ff12] text-center w-16" value={data.universalis.save_base} onChange={e => update(d => d.universalis.save_base = parseInt(e.target.value))} />
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[#1a5c0b]">Атрибут:</span> 
+                                    <select className="bg-[#051a05] text-[#38ff12] border border-[#1a5c0b]" value={data.universalis.save_attr} onChange={e => update(d => d.universalis.save_attr = e.target.value as any)}>
+                                        {ATTRIBUTES.map(a=><option key={a} value={a}>{a.toUpperCase()}</option>)}
+                                    </select>
+                                </div>
+                                <div className="text-center pt-4 border-t border-[#1a5c0b]"> 
+                                    <h3 className="text-[#1a5c0b]">TOTAL</h3> 
+                                    <span className="text-4xl text-[#38ff12] font-bold"> {data.universalis.save_base + getMod(data.stats[data.universalis.save_attr]) + pb} </span> 
+                                </div>
                             </div>
                         </div>
                         <div className="border border-[#1a5c0b] p-4 bg-[#0a100a]">
-                             <div className="flex justify-between items-end border-b border-[#1a5c0b] pb-1 mb-4">
-                                <h3 className="font-tech text-lg text-white tracking-widest">Таблица</h3>
-                                <div className="flex gap-2">
-                                    <button onClick={() => addItem(['universalis', 'custom_table'], {name: 'Entry', desc: ''})} className="text-xs text-[#38ff12] hover:text-white border border-[#38ff12] px-2">[+ ENTRY]</button>
-                                    <button onClick={() => addItem(['universalis', 'custom_table'], {name: '---', isHeader: true})} className="text-xs text-white hover:text-[#38ff12] border border-white px-2">[+ GROUP]</button>
-                                </div>
+                             <SectionHeader title="Реестр" onAdd={() => addItem(['universalis', 'custom_table'], {name: 'Запись'})} />
+                             <div className="flex justify-end -mt-8 mb-4">
+                                 <button onClick={() => addItem(['universalis', 'custom_table'], {name: '---', isHeader: true})} className="text-xs text-[#1a5c0b] hover:text-[#38ff12] border border-[#1a5c0b] px-2 ml-2">[+ GROUP]</button>
                              </div>
-                            {data.universalis.custom_table.map((c, i) => (
-                                <div 
+                             {data.universalis.custom_table.map((it, i) => (
+                                 <div 
                                     key={i} 
-                                    className={`flex justify-between items-center mb-1 ${c.isHeader ? 'mt-4 border-b border-[#38ff12] pb-1' : 'cursor-pointer hover:bg-[#38ff12]/5'} ${dragState?.active && dragState.itemIndex === i && dragState.listPathStr === JSON.stringify(['universalis', 'custom_table']) ? 'opacity-30' : 'opacity-100'}`} 
+                                    className={`flex justify-between p-2 border-b transition-opacity items-center ${it.isHeader ? 'bg-[#1a5c0b]/20 border-[#38ff12] mt-4' : 'border-[#1a5c0b]/20 hover:bg-[#1a5c0b]/10'} ${dragState?.active && dragState.itemIndex === i && dragState.listPathStr === JSON.stringify(['universalis', 'custom_table']) ? 'opacity-30' : 'opacity-100'}`}
                                     data-list-path={JSON.stringify(['universalis', 'custom_table'])}
                                     data-index={i}
-                                >
-                                    <div className="flex-1">
-                                        <input className={`bg-transparent w-full text-[#38ff12] outline-none ${c.isHeader ? 'font-bold uppercase tracking-widest text-center' : ''}`} value={c.name} onChange={e => update(d => d.universalis.custom_table[i].name = e.target.value)} />
-                                    </div>
-                                    <div className="flex items-center">
-                                        {!c.isHeader && <button onClick={() => openEdit(['universalis', 'custom_table'], i)} className="text-xs text-[#1a5c0b] hover:text-[#38ff12] mr-2">[DESC]</button>}
-                                        <ResistanceDragHandle onMouseDown={(e) => handleDragStart(e, ['universalis', 'custom_table'], i, c.name)} onTouchStart={(e) => handleDragStart(e, ['universalis', 'custom_table'], i, c.name)} />
+                                 >
+                                     <input className={`bg-transparent w-full ${it.isHeader ? 'font-bold text-[#38ff12] text-center uppercase tracking-widest' : 'text-[#38ff12]'}`} value={it.name} onChange={e => update(d => d.universalis.custom_table[i].name = e.target.value)} />
+                                     <div className="flex items-center">
+                                        {!it.isHeader && <button onClick={() => openEdit(['universalis', 'custom_table'], i)} className="mr-2 text-xs text-[#1a5c0b] hover:text-[#38ff12]">[Desc]</button>}
+                                        <ResistanceDragHandle onMouseDown={(e) => handleDragStart(e, ['universalis', 'custom_table'], i, it.name)} onTouchStart={(e) => handleDragStart(e, ['universalis', 'custom_table'], i, it.name)} />
                                         <ResistanceDeleteBtn onClick={() => removeItem(['universalis', 'custom_table'], i)} />
-                                    </div>
-                                </div>
-                            ))}
+                                     </div>
+                                 </div>
+                             ))}
                         </div>
-                         <div className="md:col-span-2 border border-[#1a5c0b] p-4 bg-[#0a100a]">
-                            <SectionHeader title="Кастомные Счетчики" onAdd={() => addItem(['universalis', 'counters'], {name: 'Counter', val: 0, max: 0})} />
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                                {data.universalis.counters.map((c, i) => (
-                                    <div key={i} className="flex justify-between items-center mb-2 border border-[#1a5c0b] p-2 bg-black" data-list-path={JSON.stringify(['universalis', 'counters'])} data-index={i}>
-                                        <div className="flex flex-col w-full">
-                                            <TerminalInput className="bg-transparent border-none w-full" value={c.name} onChange={e => update(d => d.universalis.counters[i].name = e.target.value)} />
-                                            <div className="flex gap-1 items-center justify-center mt-1">
-                                                <ResistanceNumberInput className="w-16 text-center" value={c.val} onChange={e => updateClamped(['universalis','counters',i.toString(),'val'], parseInt(e.target.value)||0, c.max)} />
-                                                <span>/</span>
-                                                <ResistanceNumberInput className="w-16 text-center text-gray-500" value={c.max} onChange={e => update(d => d.universalis.counters[i].max = parseInt(e.target.value))} />
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <ResistanceDragHandle onMouseDown={(e) => handleDragStart(e, ['universalis', 'counters'], i, c.name)} onTouchStart={(e) => handleDragStart(e, ['universalis', 'counters'], i, c.name)} />
-                                            <ResistanceDeleteBtn onClick={() => removeItem(['universalis', 'counters'], i)} />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                        <div className="md:col-span-2 border border-[#1a5c0b] p-4 bg-[#0a100a]">
+                             <SectionHeader title="Счетчики" onAdd={() => addItem(['universalis', 'counters'], {name: 'Counter', val: 0, max: 0})} />
+                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                 {data.universalis.counters.map((c, i) => (
+                                     <div 
+                                        key={i} 
+                                        className={`bg-black/40 p-3 border border-[#1a5c0b] transition-opacity ${dragState?.active && dragState.itemIndex === i && dragState.listPathStr === JSON.stringify(['universalis', 'counters']) ? 'opacity-30' : 'opacity-100'}`}
+                                        data-list-path={JSON.stringify(['universalis', 'counters'])}
+                                        data-index={i}
+                                     >
+                                         <div className="flex justify-between mb-2">
+                                             <input className="bg-transparent w-full font-bold text-[#38ff12]" value={c.name} onChange={e => update(d => d.universalis.counters[i].name = e.target.value)} />
+                                             <div className="flex">
+                                                <ResistanceDragHandle onMouseDown={(e) => handleDragStart(e, ['universalis', 'counters'], i, c.name)} onTouchStart={(e) => handleDragStart(e, ['universalis', 'counters'], i, c.name)} />
+                                                <ResistanceDeleteBtn onClick={() => removeItem(['universalis', 'counters'], i)} />
+                                             </div>
+                                         </div>
+                                         <div className="flex items-center gap-2"> 
+                                             <ResistanceNumberInput className="w-16 text-center text-white font-bold" value={c.val} onChange={e => updateClamped(['universalis','counters', i.toString(), 'val'], parseInt(e.target.value)||0, c.max)} /> 
+                                             <span className="text-[#1a5c0b]">/</span> 
+                                             <ResistanceNumberInput className="w-16 text-center text-[#1a5c0b]" value={c.max} onChange={e => update(d => d.universalis.counters[i].max = parseInt(e.target.value))} /> 
+                                         </div>
+                                     </div>
+                                 ))}
+                             </div>
                         </div>
-                     </div>
-                 )}
-
+                    </div>
+                )}
             </div>
-            )}
+          )}
         </main>
-        
-        <footer className="bg-black border-t border-[#1a5c0b] p-2 text-center text-[10px] text-[#1a5c0b] uppercase tracking-widest z-10 font-mono">
-            RESISTANCE NETWORK NODE // ENCRYPTED // ID: {id}
-        </footer>
     </div>
   );
 };
