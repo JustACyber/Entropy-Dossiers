@@ -55,7 +55,7 @@ namespace Helper
 
         public async Task MainAsync()
         {
-            Console.WriteLine(">>> STARTING ORDO BOT V3.7.1 (FIX VAR SCOPE)...");
+            Console.WriteLine(">>> STARTING ORDO BOT V3.8 (WEB LINK & FIXES)...");
 
             string envPath = FindEnvFile();
             if (!string.IsNullOrEmpty(envPath)) Env.Load(envPath);
@@ -609,7 +609,19 @@ namespace Helper
             if(state.CurrentTab == "univ") actions.Add(new DiscordButtonComponent(ButtonStyle.Secondary, "btn_edit_counters", "Set Counter"));
             
             actions.Add(new DiscordButtonComponent(ButtonStyle.Secondary, "btn_add_item", "+ Add Item"));
-            actions.Add(new DiscordButtonComponent(ButtonStyle.Danger, "btn_delete_mode", "Delete Item")); // Activates Delete Mode
+            actions.Add(new DiscordButtonComponent(ButtonStyle.Danger, "btn_delete_mode", "Delete Item")); 
+            
+            // NEW: Link Button
+            string baseUrl = Environment.GetEnvironmentVariable("WEB_URL") ?? "http://localhost:5173";
+            string linkUrl = isRes 
+                ? $"{baseUrl}/#/resistance/dossier/{state.CharId}" 
+                : $"{baseUrl}/#/dossier/{state.CharId}";
+            
+            // Link button label depends on faction
+            string linkLabel = isRes ? "🔗 Open Node" : "🔗 Web View";
+            
+            actions.Add(new DiscordLinkButtonComponent(linkUrl, linkLabel));
+
             rows.Add(new DiscordActionRowComponent(actions));
 
             // Row 4: Inspect (Still useful for details)
