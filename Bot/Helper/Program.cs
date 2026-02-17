@@ -53,7 +53,7 @@ namespace Helper
 
         public async Task MainAsync()
         {
-            Console.WriteLine(">>> STARTING ORDO BOT V3.4 (INVENTORY RESTORED)...");
+            Console.WriteLine(">>> STARTING ORDO BOT V3.5 (DB MASK FIX)...");
 
             string envPath = FindEnvFile();
             if (!string.IsNullOrEmpty(envPath)) Env.Load(envPath);
@@ -205,7 +205,6 @@ namespace Helper
                     FirestoreHelper.SetField(state.Data, "stats.mapValue.fields.hp_temp", temp);
                     FirestoreHelper.SetField(state.Data, "stats.mapValue.fields.shield_curr", shield);
 
-                    // FIX: Passed as strings for integerValue
                     var updates = new Dictionary<string, object> {
                         { "fields.stats.mapValue.fields.hp_curr.integerValue", hp },
                         { "fields.stats.mapValue.fields.hp_temp.integerValue", temp },
@@ -223,7 +222,6 @@ namespace Helper
                 {
                     var val = e.Values["val"];
                     FirestoreHelper.SetField(state.Data, "psionics.mapValue.fields.points_curr", val);
-                    // FIX: Passed as string for integerValue
                     await FirestoreHelper.PatchFields(state.CharId, state.IsResistance, new Dictionary<string, object> { { "fields.psionics.mapValue.fields.points_curr.integerValue", val } });
                 }
                 else if (parts[1] == "counter")
@@ -256,7 +254,6 @@ namespace Helper
                     }
                     else if (type.Contains("counter")) {
                         path = "universalis.mapValue.fields.counters";
-                        // FIX: Ensure values are strings for integerValue
                         fields["val"] = new JObject { ["integerValue"] = "0" };
                         fields["max"] = new JObject { ["integerValue"] = desc };
                     }
@@ -265,7 +262,7 @@ namespace Helper
                          fields["desc"] = new JObject { ["stringValue"] = desc };
                     }
                     else {
-                        path = "combat.mapValue.fields.inventory"; // Default to inventory
+                        path = "combat.mapValue.fields.inventory"; 
                         fields["desc"] = new JObject { ["stringValue"] = desc };
                     }
 
@@ -281,7 +278,7 @@ namespace Helper
             catch (Exception ex)
             {
                 Console.WriteLine($"Modal Logic Error: {ex}");
-                await e.Interaction.CreateFollowupMessageAsync(new DiscordFollowupMessageBuilder().WithContent($"❌ Database Sync Error: {ex.Message}").AsEphemeral(true));
+                await e.Interaction.CreateFollowupMessageAsync(new DiscordFollowupMessageBuilder().WithContent($"❌ Sync Error: {ex.Message}").AsEphemeral(true));
             }
         }
 
@@ -390,7 +387,6 @@ namespace Helper
                     }
                     embed.AddField("Weapons", wStr.ToString());
 
-                    // FIX: Restore Inventory
                     var inv = FirestoreHelper.GetArray(data, "combat.mapValue.fields.inventory");
                     var iStr = new StringBuilder();
                     if(inv.Count == 0) iStr.Append("Empty.");
@@ -503,7 +499,6 @@ namespace Helper
             else if (state.CurrentTab == "psi") { listPath = "psionics.mapValue.fields.spells"; typePrefix = "spell"; }
             else if (state.CurrentTab == "univ") { listPath = "universalis.mapValue.fields.custom_table"; typePrefix = "registry"; }
 
-            // Logic to populate Inspect Dropdown
             if (!string.IsNullOrEmpty(listPath))
             {
                 if (state.CurrentTab == "feats")
@@ -518,7 +513,6 @@ namespace Helper
                 }
             }
             
-            // FIX: Add Inventory to Inspect list if in GEAR tab (appending to weapons)
             if (state.CurrentTab == "gear") {
                 AddOptions(options, data, "combat.mapValue.fields.inventory", "inventory", options.Count);
             }
@@ -629,6 +623,21 @@ namespace Helper
     // --- FIRESTORE HELPER ---
     public static class FirestoreHelper
     {
+        // FIX: Clean mask path generator
+        private static string GetCleanPath(string path)
+        {
+            if (path.StartsWith("fields.")) path = path.Substring(7);
+            
+            path = path.Replace(".integerValue", "")
+                       .Replace(".stringValue", "")
+                       .Replace(".booleanValue", "")
+                       .Replace(".doubleValue", "")
+                       .Replace(".arrayValue", "")
+                       .Replace(".mapValue.fields", ""); 
+                       
+            return path;
+        }
+
         public static string GetField(JObject root, string path)
         {
             JToken current = root["fields"];
@@ -730,9 +739,8 @@ namespace Helper
         {
             string path = "";
 
-            // Logic to determine path based on prefix
             if (type == "weapon") path = "combat.mapValue.fields.weapons";
-            else if (type == "inventory") path = "combat.mapValue.fields.inventory"; // FIX: Added inventory
+            else if (type == "inventory") path = "combat.mapValue.fields.inventory"; 
             else if (type == "spell") path = "psionics.mapValue.fields.spells";
             else if (type == "registry") path = "universalis.mapValue.fields.custom_table";
             else if (type == "feat") path = "features";
@@ -781,7 +789,8 @@ namespace Helper
             string collection = isRes ? "resistance/data/protocols" : "public/data/protocols";
             string url = $"https://firestore.googleapis.com/v1/projects/{Program.PROJECT_ID}/databases/(default)/documents/artifacts/{Program.APP_ID}/{collection}/{id}";
             
-            var maskParts = updates.Keys.Select(k => "updateMask.fieldPaths=" + k.Replace("fields.", "").Replace(".integerValue", "").Replace(".stringValue", ""));
+            // FIX: Use GetCleanPath
+            var maskParts = updates.Keys.Select(k => "updateMask.fieldPaths=" + GetCleanPath(k));
             url += "?" + string.Join("&", maskParts) + "&key=" + Program.API_KEY;
 
             JObject body = new JObject();
@@ -797,7 +806,7 @@ namespace Helper
 
             var content = new StringContent(body.ToString(), Encoding.UTF8, "application/json");
             var response = await Program.HttpClient.PatchAsync(url, content);
-            // FIX: Check for error and throw to let Modal handler know
+            
             if(!response.IsSuccessStatusCode) {
                 string err = await response.Content.ReadAsStringAsync();
                 throw new Exception($"Patch Failed {response.StatusCode}: {err}");
@@ -819,7 +828,8 @@ namespace Helper
             string collection = isRes ? "resistance/data/protocols" : "public/data/protocols";
             string url = $"https://firestore.googleapis.com/v1/projects/{Program.PROJECT_ID}/databases/(default)/documents/artifacts/{Program.APP_ID}/{collection}/{id}";
             
-            url += $"?updateMask.fieldPaths={arrayPath}&key={Program.API_KEY}";
+            // FIX: Use GetCleanPath
+            url += $"?updateMask.fieldPaths={GetCleanPath(arrayPath)}&key={Program.API_KEY}";
 
             JObject root = new JObject();
             JObject f = new JObject();
@@ -842,7 +852,7 @@ namespace Helper
 
             var content = new StringContent(root.ToString(), Encoding.UTF8, "application/json");
             var response = await Program.HttpClient.PatchAsync(url, content);
-            // FIX: Check for error
+            
             if(!response.IsSuccessStatusCode) {
                 string err = await response.Content.ReadAsStringAsync();
                 throw new Exception($"SyncArray Failed {response.StatusCode}: {err}");
