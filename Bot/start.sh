@@ -1,10 +1,5 @@
-[phases.setup]
-nixPkgs = ["dotnet-sdk_8"]
+#!/bin/bash
 
-[phases.build]
-# Компилируем проект в папку "out" в корне
-cmds = ["dotnet publish Helper/Helper.csproj -c Release -o out"]
-
-[start]
-# Запускаем скрипт
-cmd = "bash start.sh"
+# Запускаем скомпилированного бота из папки out
+# exec используется для того, чтобы процесс бота заменил собой процесс скрипта (полезно для логов и остановки)
+exec dotnet out/Helper.dll
