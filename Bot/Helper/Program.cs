@@ -29,7 +29,6 @@ namespace Helper
         public string CurrentTab { get; set; } = "identity";
     }
 
-    // FIX: Added 'partial' modifier here
     partial class Program
     {
         public static Dictionary<ulong, UserState> ActiveSessions = new Dictionary<ulong, UserState>();
@@ -54,7 +53,7 @@ namespace Helper
 
         public async Task MainAsync()
         {
-            Console.WriteLine(">>> STARTING ORDO BOT V3.1 (BUILD FIX)...");
+            Console.WriteLine(">>> STARTING ORDO BOT V3.2 (COMPILER FIX)...");
 
             string envPath = FindEnvFile();
             if (!string.IsNullOrEmpty(envPath)) Env.Load(envPath);
@@ -150,17 +149,8 @@ namespace Helper
                 }
                 else if (e.Id == "btn_add_item")
                 {
-                    // Context aware add
-                    var options = new List<DiscordSelectComponentOption> {
-                        new DiscordSelectComponentOption("Inventory Item", "inventory"),
-                        new DiscordSelectComponentOption("Weapon", "weapons"),
-                        new DiscordSelectComponentOption("Feat/Trait", "features"),
-                        new DiscordSelectComponentOption("Counter", "counters"),
-                        new DiscordSelectComponentOption("Registry Entry", "custom_table")
-                    };
-                    
                     var modal = new DiscordInteractionResponseBuilder().WithTitle("ADD NEW ENTRY").WithCustomId($"modal_add_{e.Message.Id}")
-                        .AddComponents(new TextInputComponent("Type (inventory, weapons, features, counters)", "type", "Type code", "inventory")) // Fallback if user types
+                        .AddComponents(new TextInputComponent("Type (inventory, weapons, features, counters)", "type", "Type code", "inventory"))
                         .AddComponents(new TextInputComponent("Name", "name", "Item Name"))
                         .AddComponents(new TextInputComponent("Desc / Value / Dmg", "desc", "Description, Dmg or Value"));
                     
@@ -173,10 +163,9 @@ namespace Helper
                         .AddComponents(new TextInputComponent("New Value", "val", "Number"));
                      await e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
                 }
-                // INSPECT MENUS
                 else if (e.Id == "menu_inspect")
                 {
-                    var selectedId = e.Values.FirstOrDefault(); // Format: "type:index"
+                    var selectedId = e.Values.FirstOrDefault();
                     if (selectedId != null)
                     {
                         var parts = selectedId.Split(':');
@@ -208,7 +197,6 @@ namespace Helper
             {
                 if (parts[1] == "vitals")
                 {
-                    // Logic unchanged
                     var hp = e.Values["hp_curr"];
                     var temp = e.Values["hp_temp"];
                     var shield = e.Values["shield_curr"];
@@ -241,7 +229,6 @@ namespace Helper
                      var name = e.Values["name"].Trim();
                      var val = e.Values["val"];
                      FirestoreHelper.UpdateCounter(state.Data, name, int.Parse(val));
-                     // Sync whole counters array
                      await FirestoreHelper.SyncArray(state.CharId, state.IsResistance, state.Data, "universalis.mapValue.fields.counters");
                 }
                 else if (parts[1] == "add")
@@ -262,13 +249,13 @@ namespace Helper
                         fields["props"] = new JObject { ["stringValue"] = "" };
                     } 
                     else if (type.Contains("feat") || type.Contains("trait") || type.Contains("feature")) {
-                        path = "features"; // Simplified bucket
+                        path = "features";
                         fields["desc"] = new JObject { ["stringValue"] = desc };
                     }
                     else if (type.Contains("counter")) {
                         path = "universalis.mapValue.fields.counters";
                         fields["val"] = new JObject { ["integerValue"] = "0" };
-                        fields["max"] = new JObject { ["integerValue"] = desc }; // Treat desc as max
+                        fields["max"] = new JObject { ["integerValue"] = desc };
                     }
                     else if (type.Contains("custom") || type.Contains("registry")) {
                         path = "universalis.mapValue.fields.custom_table";
@@ -281,13 +268,10 @@ namespace Helper
 
                     newItem["mapValue"] = new JObject { ["fields"] = fields };
                     
-                    // Update Local
                     FirestoreHelper.AddItemToArray(state.Data, path, newItem);
-                    // Sync Remote
                     await FirestoreHelper.SyncArray(state.CharId, state.IsResistance, state.Data, path);
                 }
 
-                // Refresh UI
                 var (embed, components) = BuildInterface(state);
                 await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed).AddComponents(components));
             }
@@ -304,6 +288,9 @@ namespace Helper
             bool isRes = state.IsResistance;
             var color = isRes ? new DiscordColor(0x38ff12) : new DiscordColor(0xd4af37);
             
+            // FIX: Defined btnStyle
+            var btnStyle = isRes ? ButtonStyle.Success : ButtonStyle.Primary;
+
             var name = FirestoreHelper.GetField(data, "meta.mapValue.fields.name") ?? "Unknown";
             var img = FirestoreHelper.GetField(data, "meta.mapValue.fields.image");
             
@@ -312,11 +299,9 @@ namespace Helper
                 .WithColor(color);
             if (!string.IsNullOrEmpty(img) && img.StartsWith("http")) embed.WithThumbnail(img);
 
-            // Calculations
             int level = int.Parse(FirestoreHelper.GetField(data, "meta.mapValue.fields.level") ?? "1");
             int pb = 2 + (level - 1) / 4;
             
-            // Tab Logic
             switch (state.CurrentTab)
             {
                 case "identity":
@@ -334,7 +319,6 @@ namespace Helper
                 case "stats":
                     var spd = FirestoreHelper.GetField(data, "stats.mapValue.fields.speed") ?? "0";
                     
-                    // Calc Passive Perception
                     int wis = int.Parse(FirestoreHelper.GetField(data, "stats.mapValue.fields.wis") ?? "10");
                     int wisMod = (wis - 10) / 2;
                     bool profPer = FirestoreHelper.GetSkillState(data, "perception").isProf;
@@ -363,6 +347,7 @@ namespace Helper
                     break;
 
                 case "skills":
+                {
                     var sb = new StringBuilder();
                     sb.Append("```");
                     foreach(var s in SKILLS)
@@ -378,6 +363,7 @@ namespace Helper
                     sb.Append("```");
                     embed.WithDescription(sb.ToString());
                     break;
+                }
 
                 case "gear":
                     var money = data["fields"]?["money"]?["mapValue"]?["fields"];
@@ -407,13 +393,6 @@ namespace Helper
                     var profs = FirestoreHelper.GetArray(data, "profs.mapValue.fields.armory")
                         .Concat(FirestoreHelper.GetArray(data, "profs.mapValue.fields.tools"));
                     
-                    // Simple string list for profs
-                    var pStr = string.Join(", ", profs.Select(p => p.ToString())); // Simplified as these are usually strings in FS? Actually array of strings.
-                    // Wait, profs are strings in FS. 
-                    // FirestoreHelper.GetArray returns objects. In FS structure, array values can be stringValue.
-                    // Let's check GetArray implementation. It returns JArray of values.
-                    // For strings: { "stringValue": "Common" }
-                    
                     var profSb = new StringBuilder();
                     foreach(var p in profs) profSb.Append((p["stringValue"]?.ToString() ?? "") + ", ");
                     embed.AddField("Proficiencies", profSb.Length > 0 ? profSb.ToString().TrimEnd(',', ' ') : "None", false);
@@ -426,7 +405,6 @@ namespace Helper
                     var curr = psi?["points_curr"]?["integerValue"]?.ToString() ?? "0";
                     var modPts = int.Parse(psi?["mod_points"]?["integerValue"]?.ToString() ?? "0");
 
-                    // Calc Max Pts
                     double mult = casterType == "0.5" ? 3 : casterType == "0.33" ? 2 : 6;
                     int maxPts = (int)((mult + modPts) * level);
 
@@ -440,6 +418,7 @@ namespace Helper
                     break;
 
                 case "univ":
+                {
                     var uni = data["fields"]?["universalis"]?["mapValue"]?["fields"];
                     var saveBase = int.Parse(uni?["save_base"]?["integerValue"]?.ToString() ?? "8");
                     var saveAttr = uni?["save_attr"]?["stringValue"]?.ToString() ?? "int";
@@ -459,9 +438,9 @@ namespace Helper
                     }
                     embed.AddField("Counters", cStr.Length > 0 ? cStr.ToString() : "None", false);
                     break;
+                }
             }
 
-            // COMPONENTS
             var rows = new List<DiscordActionRowComponent>();
 
             // Row 1: Main Tabs
@@ -479,7 +458,7 @@ namespace Helper
                 new DiscordButtonComponent(btnStyle, "tab_univ", "UNIV", state.CurrentTab=="univ")
             }));
 
-            // Row 3: Actions (Context Sensitive)
+            // Row 3: Actions
             var actions = new List<DiscordComponent>();
             actions.Add(new DiscordButtonComponent(ButtonStyle.Secondary, "btn_edit_vitals", "Edit Vitals"));
             
@@ -490,19 +469,18 @@ namespace Helper
             actions.Add(new DiscordButtonComponent(ButtonStyle.Secondary, "btn_add_item", "+ Add Item/Entry"));
             rows.Add(new DiscordActionRowComponent(actions));
 
-            // Row 4: Inspect (Dropdown)
+            // Row 4: Inspect
             var options = new List<DiscordSelectComponentOption>();
             string listPath = "";
-            string typePrefix = ""; // used to id what array to look in later
+            string typePrefix = "";
 
             if (state.CurrentTab == "gear") { listPath = "combat.mapValue.fields.weapons"; typePrefix = "weapon"; }
-            else if (state.CurrentTab == "feats") { listPath = "features"; typePrefix = "feat"; } // simplified, usually iterate multiple
+            else if (state.CurrentTab == "feats") { listPath = "features"; typePrefix = "feat"; }
             else if (state.CurrentTab == "psi") { listPath = "psionics.mapValue.fields.spells"; typePrefix = "spell"; }
             else if (state.CurrentTab == "univ") { listPath = "universalis.mapValue.fields.custom_table"; typePrefix = "registry"; }
 
             if (!string.IsNullOrEmpty(listPath))
             {
-                // Special handling for merged lists in Feats
                 if (state.CurrentTab == "feats")
                 {
                     AddOptions(options, data, "features", "feat");
@@ -518,7 +496,7 @@ namespace Helper
             if (options.Count > 0)
             {
                 rows.Add(new DiscordActionRowComponent(new [] {
-                    new DiscordSelectComponent("menu_inspect", "Inspect Detail...", options.Take(25).ToList()) // Limit 25
+                    new DiscordSelectComponent("menu_inspect", "Inspect Detail...", options.Take(25).ToList())
                 }));
             }
 
@@ -531,7 +509,7 @@ namespace Helper
             for(int i=0; i<arr.Count; i++)
             {
                 var n = arr[i]["mapValue"]?["fields"]?["name"]?["stringValue"]?.ToString();
-                if(!string.IsNullOrWhiteSpace(n)) opts.Add(new DiscordSelectComponentOption(n, $"{prefix}:{i+offset}")); // Store index
+                if(!string.IsNullOrWhiteSpace(n)) opts.Add(new DiscordSelectComponentOption(n, $"{prefix}:{i+offset}"));
             }
         }
 
@@ -559,6 +537,62 @@ namespace Helper
                 }
             } catch {}
             return null;
+        }
+
+        // --- SHARED SESSION FETCHER ---
+        public static async Task<(UserState state, string error)> GetSessionState(string input)
+        {
+            string id = ExtractId(input);
+            if (string.IsNullOrEmpty(id)) return (null, "⚠️ Invalid ID");
+
+            var (data, isRes) = await FirestoreHelper.FetchProtocolData(id);
+            if (data == null) return (null, "❌ Protocol not found.");
+
+            return (new UserState { CharId = id, IsResistance = isRes, Data = data, CurrentTab = "identity" }, null);
+        }
+    }
+
+    // --- SLASH COMMANDS ---
+    public class DossierSlashCommands : ApplicationCommandModule
+    {
+        [SlashCommand("dossier", "Open Dossier")]
+        public async Task GetDossier(InteractionContext ctx, [Option("id", "ID")] string input) {
+            await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+            
+            var (state, error) = await Program.GetSessionState(input);
+            
+            if (state == null) {
+                await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent(error));
+                return;
+            }
+
+            var (embed, components) = Program.BuildInterface(state);
+            var msg = await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed).AddComponents(components));
+            
+            if (Program.ActiveSessions.ContainsKey(msg.Id)) Program.ActiveSessions.Remove(msg.Id);
+            Program.ActiveSessions.Add(msg.Id, state);
+        }
+    }
+
+    // --- TEXT COMMANDS ---
+    public class DossierCommands : BaseCommandModule
+    {
+        [Command("dossier")]
+        public async Task GetDossier(CommandContext ctx, [Description("ID")] string input) {
+            await ctx.TriggerTypingAsync();
+            
+            var (state, error) = await Program.GetSessionState(input);
+            
+            if (state == null) {
+                await ctx.RespondAsync(error);
+                return;
+            }
+
+            var (embed, components) = Program.BuildInterface(state);
+            var msg = await ctx.RespondAsync(new DiscordMessageBuilder().AddEmbed(embed).AddComponents(components));
+            
+            if (Program.ActiveSessions.ContainsKey(msg.Id)) Program.ActiveSessions.Remove(msg.Id);
+            Program.ActiveSessions.Add(msg.Id, state);
         }
     }
 
@@ -630,7 +664,6 @@ namespace Helper
 
         public static void SetMap(JObject root, string path, Dictionary<string, string> values)
         {
-             // Simplified for "money" which is flat
              var target = root["fields"]?[path]?["mapValue"]?["fields"];
              if(target == null) return;
              foreach(var kv in values)
@@ -666,20 +699,14 @@ namespace Helper
         public static string GetItemDescription(JObject data, string type, int index)
         {
             string path = "";
-            int offset = 0;
 
             if (type == "weapon") path = "combat.mapValue.fields.weapons";
             else if (type == "spell") path = "psionics.mapValue.fields.spells";
             else if (type == "registry") path = "universalis.mapValue.fields.custom_table";
             else if (type == "feat") path = "features";
-            else if (type == "ability") { path = "abilities"; offset = 0; } // Logic handled in caller for index?
-            else if (type == "trait") { path = "traits"; offset = 0; }
+            else if (type == "ability") { path = "abilities"; } 
+            else if (type == "trait") { path = "traits"; }
 
-            // Note: The index passed from select menu for Feats/Abilities/Traits was shifted.
-            // But here we need to find the object in the correct array.
-            // Simplified approach: Re-fetch arrays in same order as BuildInterface and find element by absolute index?
-            // Actually, simpler: BuildInterface encoded prefix.
-            
             var arr = GetArray(data, path);
             if (index >= arr.Count) return "Item not found (Index mismatch).";
 
@@ -722,14 +749,11 @@ namespace Helper
             string collection = isRes ? "resistance/data/protocols" : "public/data/protocols";
             string url = $"https://firestore.googleapis.com/v1/projects/{Program.PROJECT_ID}/databases/(default)/documents/artifacts/{Program.APP_ID}/{collection}/{id}";
             
-            // Construct Update Mask
             var maskParts = updates.Keys.Select(k => "updateMask.fieldPaths=" + k.Replace("fields.", "").Replace(".integerValue", "").Replace(".stringValue", ""));
             url += "?" + string.Join("&", maskParts) + "&key=" + Program.API_KEY;
 
-            // Construct Body (Deep Merge)
             JObject body = new JObject();
             foreach(var kv in updates) {
-                // Determine path structure (e.g. fields -> stats -> mapValue -> fields -> hp_curr -> integerValue)
                 var parts = kv.Key.Split('.');
                 JToken current = body;
                 for(int i=0; i<parts.Length-1; i++) {
@@ -745,7 +769,6 @@ namespace Helper
 
         public static async Task PatchMap(string id, bool isRes, string mapName, Dictionary<string, string> values)
         {
-            // Specifically for Money (flat map)
             var updates = new Dictionary<string, object>();
             foreach(var kv in values) {
                 updates[$"fields.{mapName}.mapValue.fields.{kv.Key}.stringValue"] = kv.Value;
@@ -755,61 +778,26 @@ namespace Helper
 
         public static async Task SyncArray(string id, bool isRes, JObject fullData, string arrayPath)
         {
-            // Extract the full array from local JObject and send it via PATCH
-            // This replaces the entire array in Firestore
             var arr = GetArray(fullData, arrayPath);
-            
             string collection = isRes ? "resistance/data/protocols" : "public/data/protocols";
             string url = $"https://firestore.googleapis.com/v1/projects/{Program.PROJECT_ID}/databases/(default)/documents/artifacts/{Program.APP_ID}/{collection}/{id}";
             
-            // Mask is simply the path to the array
             url += $"?updateMask.fieldPaths={arrayPath}&key={Program.API_KEY}";
 
-            // Build body structure matching the path
-            JObject body = new JObject();
-            JObject fields = new JObject();
-            body["fields"] = fields;
-
-            // Manual path reconstruction for the body
-            // Example path: combat.mapValue.fields.inventory
-            var parts = arrayPath.Split('.');
-            JToken current = fields;
-            foreach(var p in parts) {
-                if(current[p] == null) current[p] = new JObject();
-                current = current[p];
-            }
-            
-            // Set the array value
-            JObject arrayVal = new JObject();
-            arrayVal["values"] = arr;
-            current.Parent.Replace(arrayVal); // Hacky replacement: previous loop creates an object, we need to set "arrayValue": { values: ... }
-            
-            // Better reconstruction:
-            // The mask is `combat.inventory`. The Body must coincide.
-            // Actually, we can just grab the JToken from fullData and place it into a fresh root structure?
-            // No, JObject structure in fullData includes "fields".
-            
-            // Let's rely on constructing the deep object again properly.
             JObject root = new JObject();
             JObject f = new JObject();
             root["fields"] = f;
             
             JToken ptr = f;
-            var pathParts = arrayPath.Split('.'); // e.g. ["combat", "mapValue", "fields", "inventory"]
+            var pathParts = arrayPath.Split('.'); 
             
             for(int i=0; i<pathParts.Length - 1; i++) {
                  ptr[pathParts[i]] = new JObject();
                  ptr = ptr[pathParts[i]];
             }
             
-            // The last part (e.g. "inventory") needs to hold "arrayValue"
             JObject av = new JObject();
             av["values"] = arr;
-            
-            // However, the path in 'fullData' is `fields -> combat -> mapValue -> fields -> inventory -> arrayValue`
-            // The `arrayPath` argument is likely just `combat.mapValue.fields.inventory` (relative to fields).
-            // So if pathParts.Last() is "inventory", then ptr["inventory"] should be { "arrayValue": { ... } }
-            
             JObject arrayContainer = new JObject();
             arrayContainer["arrayValue"] = av;
             
@@ -818,47 +806,6 @@ namespace Helper
             var content = new StringContent(root.ToString(), Encoding.UTF8, "application/json");
             var response = await Program.HttpClient.PatchAsync(url, content);
             if(!response.IsSuccessStatusCode) Console.WriteLine("Sync Array Failed: " + response.StatusCode);
-        }
-    }
-    
-    // Slash & Text Commands (Boilerplate)
-    public class DossierSlashCommands : ApplicationCommandModule
-    {
-        [SlashCommand("dossier", "Open Dossier")]
-        public async Task GetDossier(InteractionContext ctx, [Option("id", "ID")] string input) {
-            await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
-            await Program.ProcessDossierRequest(ctx.Client, ctx.Channel, ctx.User, input, 
-                async (b) => await ctx.EditResponseAsync(b));
-        }
-    }
-
-    public class DossierCommands : BaseCommandModule
-    {
-        [Command("dossier")]
-        public async Task GetDossier(CommandContext ctx, [Description("ID")] string input) {
-            await ctx.TriggerTypingAsync();
-            await Program.ProcessDossierRequest(ctx.Client, ctx.Channel, ctx.User, input, 
-                async (b) => await ctx.RespondAsync(b));
-        }
-    }
-
-    // Shared Logic
-    // FIX: Removed 'static', kept 'partial'
-    public partial class Program 
-    {
-        public static async Task ProcessDossierRequest(DiscordClient client, DiscordChannel channel, DiscordUser user, string input, Func<DiscordWebhookBuilder, Task<DiscordMessage>> sendFunc)
-        {
-            try {
-                string id = ExtractId(input);
-                if (string.IsNullOrEmpty(id)) { await sendFunc(new DiscordWebhookBuilder().WithContent("⚠️ Invalid ID")); return; }
-                var (data, isRes) = await FirestoreHelper.FetchProtocolData(id);
-                if (data == null) { await sendFunc(new DiscordWebhookBuilder().WithContent("❌ Not found")); return; }
-                var state = new UserState { CharId = id, IsResistance = isRes, Data = data, CurrentTab = "identity" };
-                var (embed, components) = BuildInterface(state);
-                var msg = await sendFunc(new DiscordWebhookBuilder().AddEmbed(embed).AddComponents(components));
-                if (ActiveSessions.ContainsKey(msg.Id)) ActiveSessions.Remove(msg.Id);
-                ActiveSessions.Add(msg.Id, state);
-            } catch (Exception ex) { Console.WriteLine(ex); await sendFunc(new DiscordWebhookBuilder().WithContent("System Error")); }
         }
     }
 }
