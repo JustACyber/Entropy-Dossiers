@@ -1,14 +1,16 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { OrdoService } from '../services/firebase';
 import { Character } from '../types';
-import { InputModal } from '../components/Components';
+import { InputModal, EmpireConfirmModal } from '../components/Components';
 
 const Registry: React.FC = () => {
   const [characters, setCharacters] = useState<Record<string, Character>>({});
   const [now, setNow] = useState(new Date());
   const [isOffline, setIsOffline] = useState(OrdoService.isOffline());
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [deleteData, setDeleteData] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: '', name: '' });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -35,12 +37,11 @@ const Registry: React.FC = () => {
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, id: string, name: string) => {
-    e.stopPropagation();
-    const conf = prompt(`ПОДТВЕРДИТЕ УДАЛЕНИЕ: ${name}\nВВЕДИТЕ "УДАЛИТЬ":`);
-    if (conf === "УДАЛИТЬ") {
-      await OrdoService.delete(id);
-    }
+  const confirmDelete = async () => {
+      if (deleteData.id) {
+          await OrdoService.delete(deleteData.id);
+          setDeleteData({ isOpen: false, id: '', name: '' });
+      }
   };
 
   return (
@@ -55,6 +56,14 @@ const Registry: React.FC = () => {
           title="ИНИЦИАЛИЗАЦИЯ ПРОТОКОЛА"
           placeholder="Идентификатор..."
        />
+
+       <EmpireConfirmModal 
+            isOpen={deleteData.isOpen}
+            onClose={() => setDeleteData({ ...deleteData, isOpen: false })}
+            onConfirm={confirmDelete}
+            title="ПОДТВЕРЖДЕНИЕ ЛИКВИДАЦИИ"
+            message={`ВЫ УВЕРЕНЫ, ЧТО ХОТИТЕ УДАЛИТЬ ПРОТОКОЛ: ${deleteData.name}?`}
+        />
 
       <header className="min-h-[120px] md:h-[140px] flex flex-col justify-center items-center border-b-2 border-ordo-gold bg-[radial-gradient(circle_at_center,#1a0f0f_0%,#000_100%)] relative z-10 shadow-[0_5px_30px_rgba(0,0,0,0.8)] shrink-0 py-6 md:py-0">
         <div className="absolute top-4 left-4 z-50">
@@ -92,7 +101,7 @@ const Registry: React.FC = () => {
               <div className="absolute bottom-[-1px] right-[-1px] w-[15px] h-[15px] border-r-2 border-b-2 border-ordo-gold transition-all duration-300 group-hover:w-[30px] group-hover:h-[30px]"></div>
 
               <div 
-                onClick={(e) => handleDelete(e, char.id, char.meta.name)}
+                onClick={(e) => { e.stopPropagation(); setDeleteData({ isOpen: true, id: char.id, name: char.meta.name }); }}
                 className="absolute top-4 right-4 w-9 h-9 bg-[rgba(0,0,0,0.8)] border border-ordo-crimson text-ordo-crimson text-2xl flex items-center justify-center opacity-100 md:opacity-0 group-hover:opacity-100 transition-all z-20 hover:bg-ordo-crimson hover:text-black hover:shadow-[0_0_15px_#8a0000]"
               >
                 ×
