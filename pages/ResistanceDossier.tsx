@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom';
 import { OrdoService } from '../services/firebase';
 import { Character, Attributes } from '../types';
-import { ResistanceEditModal, ResistanceDragHandle, ResistanceDeleteBtn, ResistanceToggle, ResistanceNumberInput } from '../components/Components';
+import { ResistanceEditModal, ResistanceDragHandle, ResistanceDeleteBtn, ResistanceToggle, ResistanceNumberInput, ResistanceImageUploadModal } from '../components/Components';
 import { debounce } from 'lodash';
 
 // --- CONSTANTS & HELPERS ---
@@ -91,6 +91,7 @@ const ResistanceDossier: React.FC = () => {
   
   // Modal State
   const [editingItem, setEditingItem] = useState<{ path: string[], index: number, item: any } | null>(null);
+  const [isImgModalOpen, setImgModalOpen] = useState(false);
 
   // Drag State
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -308,6 +309,12 @@ const ResistanceDossier: React.FC = () => {
             </div>
         )}
 
+        <ResistanceImageUploadModal 
+            isOpen={isImgModalOpen}
+            onClose={() => setImgModalOpen(false)}
+            onConfirm={(url) => update(d => d.meta.image = url)}
+        />
+
         <ResistanceEditModal 
             isOpen={!!editingItem}
             onClose={() => setEditingItem(null)}
@@ -406,7 +413,7 @@ const ResistanceDossier: React.FC = () => {
                                 <div className="absolute bottom-0 w-full p-2 text-xs text-center border-t border-[#1a5c0b] bg-black/80">
                                     <span className="animate-pulse text-red-500">● REC</span> VISUAL ID
                                 </div>
-                                <button onClick={() => { const u = prompt("Image URL"); if(u) update(d=>d.meta.image=u) }} className="absolute top-2 right-2 border border-[#38ff12] bg-black px-2 hover:bg-[#38ff12] hover:text-black">EDIT</button>
+                                <button onClick={() => setImgModalOpen(true)} className="absolute top-2 right-2 border border-[#38ff12] bg-black px-2 hover:bg-[#38ff12] hover:text-black">EDIT</button>
                             </div>
                         </div>
                         <div className="md:col-span-8 flex flex-col gap-6">
@@ -800,11 +807,11 @@ const ResistanceDossier: React.FC = () => {
                             </div>
                         </div>
                         <div className="border border-[#1a5c0b] p-4 bg-[#0a100a]">
-                             <div className="flex justify-between items-end border-b border-[#1a5c0b] pb-1 mb-4">
+                             <div className="flex flex-col sm:flex-row justify-between items-end border-b border-[#1a5c0b] pb-1 mb-4 gap-2">
                                 <h3 className="font-tech text-lg text-white tracking-widest">Реестр</h3>
-                                <div className="flex gap-2">
-                                    <button onClick={() => addItem(['universalis', 'custom_table'], {name: '---', isHeader: true})} className="text-xs text-[#1a5c0b] hover:text-[#38ff12] border border-[#1a5c0b] px-2">[+ GROUP]</button>
-                                    <button onClick={() => addItem(['universalis', 'custom_table'], {name: 'Запись'})} className="text-xs text-[#38ff12] hover:text-white border border-[#38ff12] px-2">[ADD NEW]</button>
+                                <div className="flex gap-2 flex-wrap sm:flex-nowrap shrink-0">
+                                    <button onClick={() => addItem(['universalis', 'custom_table'], {name: '---', isHeader: true})} className="text-xs text-[#1a5c0b] hover:text-[#38ff12] border border-[#1a5c0b] px-2 whitespace-nowrap shrink-0">[+ GROUP]</button>
+                                    <button onClick={() => addItem(['universalis', 'custom_table'], {name: 'Запись'})} className="text-xs text-[#38ff12] hover:text-white border border-[#38ff12] px-2 whitespace-nowrap shrink-0">[ADD NEW]</button>
                                 </div>
                              </div>
                              {data.universalis.custom_table.map((it, i) => (
