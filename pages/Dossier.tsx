@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { OrdoService } from '../services/firebase';
@@ -35,6 +34,16 @@ interface DragState {
   itemName: string;
   pos: { x: number; y: number };
 }
+
+// Custom Styled Checkbox for Empire
+const EmpireToggle: React.FC<{ checked: boolean; onChange: (checked: boolean) => void }> = ({ checked, onChange }) => (
+  <div 
+    onClick={(e) => { e.stopPropagation(); onChange(!checked); }}
+    className={`w-5 h-5 border border-ordo-gold cursor-pointer flex items-center justify-center transition-all bg-[rgba(0,0,0,0.5)] hover:border-white group`}
+  >
+    <div className={`w-3 h-3 bg-ordo-gold transition-all duration-300 ${checked ? 'opacity-100 scale-100 shadow-[0_0_8px_#d4af37]' : 'opacity-0 scale-50'}`}></div>
+  </div>
+);
 
 const Dossier: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -638,25 +647,27 @@ const Dossier: React.FC = () => {
                             </DataBlock>
                         </div>
                     )}
-                     {/* Spells part largely unchanged, just ensuring existing logic works */}
+                     
                      {subTab === 'spells' && (
                         <DataBlock className="overflow-x-auto">
                             <SectionHeader title="Матрица Заклинаний" onAdd={() => addItem(['psionics', 'spells'], {name: 'Новое', time: '1д', range: '18м', cost: 0, dur: 'Мгновенно'})} />
-                            {/* Cantrips & Spells tables logic unchanged */}
-                            {/* ... (reusing existing spell table render code) ... */}
-                            {/* Shortened for brevity as logic is identical to existing file, except ensure DragHandle/DeleteBtn are present */}
+                            
                             {[{t:'ЗАГОВОРЫ',f:(c:number)=>c===0},{t:'ЗАКЛИНАНИЯ',f:(c:number)=>c>0}].map(grp => (
                                 <div key={grp.t} className="mb-6 min-w-[500px]">
                                 <h3 className="text-ordo-gold font-header text-sm tracking-[3px] border-b border-white/10 mb-2 py-1 text-center bg-white/5">{grp.t}</h3>
                                 <table className="w-full text-left border-collapse">
-                                    <thead className="text-ordo-gold text-xs uppercase opacity-50"><tr><th>Название</th><th>Вр</th><th>Дист</th><th>К</th><th>Длит</th><th>Ст</th><th></th></tr></thead>
+                                    <thead className="text-ordo-gold text-xs uppercase opacity-50"><tr><th>Название</th><th>Вр</th><th>Дист</th><th className="text-center">K</th><th>Длит</th><th>Ст</th><th></th></tr></thead>
                                     <tbody>
                                         {[...data.psionics.spells].map((s, i) => ({s, i})).filter(o => grp.f(o.s.cost)).sort((a,b) => a.s.cost - b.s.cost).map(({s, i}) => (
                                             <tr key={i} className={`border-b border-white/5 hover:bg-white/5 transition-opacity ${dragState?.active && dragState.itemIndex === i && dragState.listPathStr === JSON.stringify(['psionics', 'spells']) ? 'opacity-30' : 'opacity-100'}`} data-list-path={JSON.stringify(['psionics', 'spells'])} data-index={i}>
                                                 <td className="p-2 cursor-pointer" onClick={() => openEdit(['psionics', 'spells'], i)}><span className="font-bold text-white hover:text-ordo-gold">{s.name}</span></td>
                                                 <td className="p-2"><input className="bg-transparent w-10 text-center" value={s.time} onChange={e => update(d => d.psionics.spells[i].time = e.target.value)} /></td>
                                                 <td className="p-2"><input className="bg-transparent w-10 text-center" value={s.range} onChange={e => update(d => d.psionics.spells[i].range = e.target.value)} /></td>
-                                                <td className="p-2 text-center"><input type="checkbox" checked={s.conc} onChange={e => update(d => d.psionics.spells[i].conc = e.target.checked)} /></td>
+                                                <td className="p-2 text-center">
+                                                    <div className="flex justify-center">
+                                                        <EmpireToggle checked={s.conc} onChange={c => update(d => d.psionics.spells[i].conc = c)} />
+                                                    </div>
+                                                </td>
                                                 <td className="p-2"><input className="bg-transparent w-16 text-center" value={s.dur} onChange={e => update(d => d.psionics.spells[i].dur = e.target.value)} /></td>
                                                 <td className="p-2"><EmpireNumberInput className={`bg-transparent w-12 text-center ${s.cost>0?'text-purple-300 font-bold':'text-gray-500'}`} value={s.cost} onChange={e => update(d => d.psionics.spells[i].cost = parseInt(e.target.value))} /></td>
                                                 <td className="p-2 text-right flex items-center justify-end">
