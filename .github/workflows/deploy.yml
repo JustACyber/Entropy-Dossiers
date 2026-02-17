@@ -10,9 +10,7 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
+# Concurrency removed to prevent cancellation errors
 
 jobs:
   build:
@@ -25,7 +23,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          # Cache removed to prevent lockfile errors
           
       - name: Install dependencies
         run: npm install
@@ -34,7 +31,6 @@ jobs:
         run: npm run build
       
       # FIX FOR REACT ROUTER ON GITHUB PAGES
-      # This copies index.html to 404.html so refreshing internal pages works
       - name: Copy index.html to 404.html
         run: cp dist/index.html dist/404.html
         
