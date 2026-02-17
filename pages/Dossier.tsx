@@ -309,7 +309,7 @@ const Dossier: React.FC = () => {
       <header className="h-[60px] md:h-[80px] border-b-2 border-ordo-gold bg-gradient-to-b from-[#1a0f0f] to-[#0f0b0b] flex justify-between items-center px-4 md:px-10 relative z-50 shadow-lg shrink-0">
         <div className="absolute bottom-[-5px] left-0 right-0 h-[3px] bg-ordo-crimson border-b border-black"></div>
         <div className="flex items-center w-full md:w-auto">
-          <Link to="/" className="border border-ordo-gold text-ordo-gold px-2 py-1 md:px-4 md:py-2 font-header hover:bg-ordo-gold hover:text-black transition-all mr-4 text-sm md:text-base whitespace-nowrap">← <span className="hidden md:inline">В РЕЕСТР</span></Link>
+          <Link to="/registry" className="border border-ordo-gold text-ordo-gold px-2 py-1 md:px-4 md:py-2 font-header hover:bg-ordo-gold hover:text-black transition-all mr-4 text-sm md:text-base whitespace-nowrap">← <span className="hidden md:inline">В РЕЕСТР</span></Link>
           <div className="font-header text-ordo-gold font-bold flex items-center gap-2 md:gap-4 flex-1 md:flex-none justify-center md:justify-start">
             <span className="text-2xl md:text-4xl text-transparent bg-clip-text bg-gradient-to-b from-ordo-gold to-ordo-crimson transform scale-y-75">▼</span>
             <div className="text-center md:text-left">
