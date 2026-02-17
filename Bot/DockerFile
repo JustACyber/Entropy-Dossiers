@@ -1,0 +1,27 @@
+# Используем официальный образ .NET SDK для сборки
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /source
+
+# 1. Копируем файл проекта. 
+# Так как Dockerfile лежит в папке Bot, а код в Bot/Helper, нужно указывать путь Helper/
+COPY Helper/Helper.csproj ./Helper/
+
+# 2. Восстанавливаем зависимости
+RUN dotnet restore "Helper/Helper.csproj"
+
+# 3. Копируем остальные файлы исходного кода
+COPY Helper/ ./Helper/
+
+# 4. Переходим в папку проекта и собираем релиз
+WORKDIR /source/Helper
+RUN dotnet publish -c Release -o /app/publish
+
+# Финальный этап - легкий образ для запуска (Runtime)
+FROM mcr.microsoft.com/dotnet/runtime:8.0
+WORKDIR /app
+
+# Копируем собранные файлы из этапа сборки
+COPY --from=build /app/publish .
+
+# Команда запуска
+ENTRYPOINT ["dotnet", "Helper.dll"]
