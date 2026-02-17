@@ -53,7 +53,7 @@ namespace Helper
 
         public async Task MainAsync()
         {
-            Console.WriteLine(">>> STARTING ORDO BOT V3.3 (FINAL FIXES)...");
+            Console.WriteLine(">>> STARTING ORDO BOT V3.4 (INVENTORY RESTORED)...");
 
             string envPath = FindEnvFile();
             if (!string.IsNullOrEmpty(envPath)) Env.Load(envPath);
@@ -265,7 +265,7 @@ namespace Helper
                          fields["desc"] = new JObject { ["stringValue"] = desc };
                     }
                     else {
-                        path = "combat.mapValue.fields.inventory";
+                        path = "combat.mapValue.fields.inventory"; // Default to inventory
                         fields["desc"] = new JObject { ["stringValue"] = desc };
                     }
 
@@ -281,6 +281,7 @@ namespace Helper
             catch (Exception ex)
             {
                 Console.WriteLine($"Modal Logic Error: {ex}");
+                await e.Interaction.CreateFollowupMessageAsync(new DiscordFollowupMessageBuilder().WithContent($"❌ Database Sync Error: {ex.Message}").AsEphemeral(true));
             }
         }
 
@@ -388,6 +389,18 @@ namespace Helper
                          wStr.AppendLine($"• **{n}** ({d})");
                     }
                     embed.AddField("Weapons", wStr.ToString());
+
+                    // FIX: Restore Inventory
+                    var inv = FirestoreHelper.GetArray(data, "combat.mapValue.fields.inventory");
+                    var iStr = new StringBuilder();
+                    if(inv.Count == 0) iStr.Append("Empty.");
+                    int count = 0;
+                    foreach(var i in inv) {
+                        if (count++ > 15) { iStr.AppendLine("...and more"); break; }
+                        var n = i["mapValue"]?["fields"]?["name"]?["stringValue"]?.ToString();
+                        iStr.AppendLine($"• {n}");
+                    }
+                    embed.AddField("Inventory", iStr.ToString());
                     break;
 
                 case "feats":
@@ -482,11 +495,15 @@ namespace Helper
             string listPath = "";
             string typePrefix = "";
 
-            if (state.CurrentTab == "gear") { listPath = "combat.mapValue.fields.weapons"; typePrefix = "weapon"; }
+            if (state.CurrentTab == "gear") { 
+                listPath = "combat.mapValue.fields.weapons"; 
+                typePrefix = "weapon"; 
+            }
             else if (state.CurrentTab == "feats") { listPath = "features"; typePrefix = "feat"; }
             else if (state.CurrentTab == "psi") { listPath = "psionics.mapValue.fields.spells"; typePrefix = "spell"; }
             else if (state.CurrentTab == "univ") { listPath = "universalis.mapValue.fields.custom_table"; typePrefix = "registry"; }
 
+            // Logic to populate Inspect Dropdown
             if (!string.IsNullOrEmpty(listPath))
             {
                 if (state.CurrentTab == "feats")
@@ -499,6 +516,11 @@ namespace Helper
                 {
                     AddOptions(options, data, listPath, typePrefix);
                 }
+            }
+            
+            // FIX: Add Inventory to Inspect list if in GEAR tab (appending to weapons)
+            if (state.CurrentTab == "gear") {
+                AddOptions(options, data, "combat.mapValue.fields.inventory", "inventory", options.Count);
             }
 
             if (options.Count > 0)
@@ -617,7 +639,6 @@ namespace Helper
                 current = current[part];
                 if (current == null) return null;
             }
-            // FIX: Added doubleValue check
             return current["stringValue"]?.ToString() ?? current["integerValue"]?.ToString() ?? current["doubleValue"]?.ToString();
         }
 
@@ -709,12 +730,14 @@ namespace Helper
         {
             string path = "";
 
+            // Logic to determine path based on prefix
             if (type == "weapon") path = "combat.mapValue.fields.weapons";
+            else if (type == "inventory") path = "combat.mapValue.fields.inventory"; // FIX: Added inventory
             else if (type == "spell") path = "psionics.mapValue.fields.spells";
             else if (type == "registry") path = "universalis.mapValue.fields.custom_table";
             else if (type == "feat") path = "features";
-            else if (type == "ability") { path = "abilities"; } 
-            else if (type == "trait") { path = "traits"; }
+            else if (type == "ability") path = "abilities";
+            else if (type == "trait") path = "traits";
 
             var arr = GetArray(data, path);
             if (index >= arr.Count) return "Item not found (Index mismatch).";
@@ -773,7 +796,12 @@ namespace Helper
             }
 
             var content = new StringContent(body.ToString(), Encoding.UTF8, "application/json");
-            await Program.HttpClient.PatchAsync(url, content);
+            var response = await Program.HttpClient.PatchAsync(url, content);
+            // FIX: Check for error and throw to let Modal handler know
+            if(!response.IsSuccessStatusCode) {
+                string err = await response.Content.ReadAsStringAsync();
+                throw new Exception($"Patch Failed {response.StatusCode}: {err}");
+            }
         }
 
         public static async Task PatchMap(string id, bool isRes, string mapName, Dictionary<string, string> values)
@@ -814,7 +842,11 @@ namespace Helper
 
             var content = new StringContent(root.ToString(), Encoding.UTF8, "application/json");
             var response = await Program.HttpClient.PatchAsync(url, content);
-            if(!response.IsSuccessStatusCode) Console.WriteLine("Sync Array Failed: " + response.StatusCode);
+            // FIX: Check for error
+            if(!response.IsSuccessStatusCode) {
+                string err = await response.Content.ReadAsStringAsync();
+                throw new Exception($"SyncArray Failed {response.StatusCode}: {err}");
+            }
         }
     }
 }
